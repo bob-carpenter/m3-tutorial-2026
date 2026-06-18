@@ -1,6 +1,9 @@
 # Bayesian modeling and inference with Stan
 
-The materials for a one-day class taught by @bob-carpenter and @mitzimorris.
+Source materials for a one-day class taught by @bob-carpenter and
+@mitzimorris at the [2026 Modern Modeling Methods
+Conference](https://modeling.fordham.edu/2026-modern-modeling-methods-conference/modern-modeling-methods-2026-preliminary-program/)
+at Fordham University.
 
 ## Bob Carpenter's slides
 

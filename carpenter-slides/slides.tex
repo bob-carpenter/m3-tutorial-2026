@@ -1,0 +1,29 @@
+% TO BUILD:
+% mkdir -p build
+% pdflatex -output-directory=build slides.tex
+
+\documentclass[10pt]{report}
+
+\usepackage{talk}
+
+\begin{document}
+\sf
+\spc{\LARGE\myemph{Bayesian modeling and inference with Stan}}
+\\[12pt]
+\spc{\large\slshape Modern Modeling Methods Conference}
+\\[4pt]
+\spc{\slshape Fordham University, June 22, 2026}
+\\[24pt]
+\spc{{\large \myemph{Mitzi Morris}, Stan developer} \ (GitHub: \texttt{mitzimorris})}
+\\[8pt]
+\spc{{\large \myemph{Bob Carpenter}, Stan developer} \ (GitHub: \texttt{bob-carpenter})}
+\vfill
+\spc{\small
+  Stan 2.29
+  \hfill
+  \url{http://mc-stan.org}
+  \hfill
+  \includegraphics[width=0.5in]{img/stan-logo.png}
+}
+
+\end{document}
