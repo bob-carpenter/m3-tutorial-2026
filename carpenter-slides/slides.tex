@@ -8,22 +8,587 @@
 
 \begin{document}
 \sf
+\vspace*{-12pt}
 \spc{\LARGE\myemph{Bayesian modeling and inference with Stan}}
 \\[12pt]
 \spc{\large\slshape Modern Modeling Methods Conference}
 \\[4pt]
 \spc{\slshape Fordham University, June 22, 2026}
-\\[24pt]
-\spc{{\large \myemph{Mitzi Morris}, Stan developer} \ (GitHub: \texttt{mitzimorris})}
+\\[18pt]
+\spc{{\large \myemph{Mitzi Morris}, Stan developer} \ ({mitzimorris on GitHub})}
 \\[8pt]
-\spc{{\large \myemph{Bob Carpenter}, Stan developer} \ (GitHub: \texttt{bob-carpenter})}
+\spc{{\large \myemph{Bob Carpenter}, Stan developer} \ (bob-carpenter on GitHub)}
 \vfill
-\spc{\small
-  Stan 2.29
+\spc{
+ \raisebox{-24pt}{
+   \includegraphics[width=0.5in]{img/stan-logo.png}
+ }
   \hfill
-  \url{http://mc-stan.org}
-  \hfill
-  \includegraphics[width=0.5in]{img/stan-logo.png}
+  {\large \myemph{course materials:}} 
+  \raisebox{-24pt}{
+    \includegraphics[width=0.75in]{img/qr-code-github.png}
+  }
 }
+
+
+\sld{Who is Stan?}
+%
+\begin{itemize}
+\item Stan is named in honor of \myemph{Stanislaw Ulam} (1909--1984)
+\item Co-inventor of the \myemph{Monte Carlo method}
+\item \small\slshape Ulam holding the Fermiac, Enrico Fermi's
+  \\ physical Monte Carlo simulator for random
+  \\ neutron diffusion
+  \\ {\tiny \sf image from G.~C.~Geisler (2000)
+   Los Alamos report LA-UR-2532}
+\begin{center}
+  \vspace*{-1.25in}
+    \null \hfill \includegraphics[width=0.3\textwidth]{img/ulam-fermiac.jpg}
+  \end{center}
+\end{itemize}
+
+\sld{What is Stan?}
+%
+\begin{itemize}
+\item Stan is an \myemph{imperative probabilistic programming language}
+  \begin{subitemize}
+  \item  cf., BUGS: declarative; \ Church, JAX: functional; PyMC/NumPyro: mix
+  \end{subitemize}
+\item Stan \myemph{program}: defines a probability model
+  \begin{subitemize}
+  \item declares data and (constrained) parameter variables
+  \item defines log posterior (or penalized likelihood)
+  \item defines posterior predictive quantities (e.g., predictions, event probabilities)
+  \end{subitemize}
+\item Stan \myemph{inference}: fits model to data \& makes predictions
+  \begin{subitemize}
+  \item MCMC for full Bayesian inference
+  \item VB for approximate Bayesian inference
+  \item MLE for penalized maximum likelihood estimation
+  \end{subitemize}
+\end{itemize}
+
+\mypart{Warmup}{}
+
+\sld{Repeated trials}
+%
+% need space to allow noindent to function
+
+\noindent
+\begin{minipage}[t]{0.75\textwidth}
+\vspace*{-1.9in}
+\begin{itemize}
+\item Suppose we \myemph{repeatedly generate a random outcome} from among
+two or more potential outcomes
+\item Suppose the outcome \myemph{chances are the same each time}
+\begin{subsubitemize}
+\item i.e., outcomes are independent and identically distributed (i.i.d.)
+\end{subsubitemize}
+\item For example, \myemph{spin a fair spinner} (without cheating), such as one from \emph{Family Cricket}.
+\vfill
+\item {\slshape This slide was generated in a cricket-playing country; please mentally
+    substitute your favorite binary trial.}
+\end{itemize}
+\end{minipage}
+%
+\begin{minipage}[t]{0.25\textwidth}
+\hfill \includegraphics[height=2in]{img/family-cricket-spinner.jpg}
+\end{minipage}
+\vfill
+\hfill {\tiny Image source: \url{http://replaycricket.com/2010/10/29/family-cricket/}}
+
+
+\sld{Repeated binary trials}
+%
+\begin{itemize}
+\item Suppose the outcome is binary and assigned to 0 or 1; e.g.,
+\begin{subitemize}
+\item 20\% chance of outcome 1: \emph{ball in play}
+\item 80\% chance of outcome 0: \emph{ball \emph{not} in play}
+\item \slshape Substitute your favorite binary trial here, e.g., getting a test question right, reacting to a stimulus within a given time, etc.
+\end{subitemize}
+\vfill
+\item How will \myemph{proportion of successes differ} given 10, 100, 1000, or 10000 trials?
+  \begin{subitemize}
+  \item Estimate ability as successes out of trials.
+  \item This is asking about the \myemph{standard error of the estimator}, which is the
+    standard deviation of the estimate over varying data.
+  \end{subitemize}
+\end{itemize}
+
+
+\sld{Simulated i.i.d. binary trials}
+%
+\begin{itemize}
+\item \myemph{10 trials} \hfill (10\% to 50\% success rate)
+\\[4pt] 2 3 5 2 4 1 2 2 1 1
+\vspace*{3pt}
+%
+\item \myemph{100 trials} \hfill (16\% to 26\% success rate)
+\\[4pt] 26 18 23 17 21 16 21 15 21 26
+\vspace*{3pt}
+%
+\item \myemph{1000 trials} \hfill (18\% to 22\% success rate)
+\\[4pt] 181 212 175 213 216 179 223 198 188 194
+\vspace*{3pt}
+%
+\item \myemph{10,000 trials} \hfill (19.3\% to 20.3\% success rate)
+\\[4pt] 2029 1955 1981 1980 2001 2014 1931 1982 1989 2020
+\end{itemize}
+
+\sld{Stan code for simulating binary trials}
+\begin{stancode}
+transformed data {
+  array[4] int N = {10, 100, 1000, 10000};
+  real<lower=0, upper=1> theta = 0.46;
+}
+generated quantities {
+  array[4] int n = binomial_rng(N, theta);
+  vector[4] theta_hat = to_vector(n) ./ to_vector(N);
+}
+\end{stancode}
+
+
+\sld{Pop Quiz! Cancer Clusters}
+%
+\begin{itemize}
+\item Why do the lowest (left) and highest (right) cancer counties look so similar?
+\end{itemize}
+\vspace*{1pt}
+\begin{center}
+\hfill
+\includegraphics[width=0.45\textwidth]{img/low-cancer.jpg}
+\hfill
+\includegraphics[width=0.45\textwidth]{img/high-cancer.jpg}
+\hfill
+\end{center}
+\vfill
+\hfill {\tiny Image from Gelman et al., {\slshape Bayesian Data Analysis, 3rd Edition} (2013)}
+
+
+\sld{Pop Quiz Answer}
+%
+\begin{itemize}
+\item \myemph{Hint}: mix earlier simulations of repeated i.i.d. trials with 20\% success and sort:
+{\footnotesize
+\begin{center}
+\begin{tabular}{ccccc}
+1/10 &  1/10 &  1/10 &  15/100 &  16/100
+\\
+17/100 &  175/1000 &  179/1000 &  18/100 &  181/1000
+\\
+188/1000 &  194/1000 &  198/1000 & 2/10 &  2/10
+\\
+2/10 &  2/10 & 21/100 &  21/100 &  21/100
+\\
+212/1000 &  213/1000 &   216/1000 &   223/1000 &  23/100
+\\
+26/100 &  26/100 &  3/10 &  4/10 &  5/10
+\end{tabular}
+\end{center}
+}
+\item More variation in observed rates with smaller sample sizes
+\vfill
+\item \myemph{Answer}: High cancer and low cancer counties are small populations
+\end{itemize}
+
+\sld{The central limit theorem}
+%
+\vspace*{-3pt}
+\begin{center}
+\vspace*{-3pt}
+\includegraphics[width=0.4\textwidth]{img/coin-flip-clt.png}
+\end{center}
+\vspace*{-8pt}
+\begin{subitemize}
+\item \myemph{proportion heads} for \myemph{100 sequences} (light grey lines) of 100,000 flips
+\vspace*{-2pt}
+\item \myemph{converges to expected value} 0.5 (red), with \myemph{standard deviation} $0.5 / \sqrt{\textsf{\# draws}}$
+  \begin{subitemize}
+  \item single flip standard deviation is 0.5
+  \item standard deviation is \myemph{standard error of maximum likelihood estimate}, $\widehat{\theta} = \textsf{\# heads} / \textsf{\# flips}$
+  \end{subitemize}
+\end{subitemize}
+
+
+\sld{The central limit theorem (cont.)}
+%
+\begin{itemize}
+\item \myemph{The} theorem of statistics
+\vspace*{-4pt}
+\begin{subsubitemize}
+\item Cardano (1501--1576) conjectured convergence; (Jacob) Bernoulli
+  (1713) proved convergence for binomials (law of large numbers); de Moivre
+  (1733) conjectured the CLT; Laplace (1812) proved i.i.d.\ version;
+  Lyapunov (1901) removed i.i.d.\ constraint
+\end{subsubitemize}
+\item Sample \myemph{mean} of $N$ independent variables with finite expectation/variance
+\begin{subitemize}
+\item  \myemph{converges} to their expected mean as $N \rightarrow \infty$
+\item relevant for \myemph{sampling-based Bayesian inference} as provided by Stan 
+\item \myemph{rate} of convergence is {\large ${\mathcal{O}}\!\left( \frac{1}{\sqrt{N}} \right)$}
+  with factor for standard deviation
+\item i.e., each \myemph{decimal place of accuracy} requires \myemph{$100 \times$ more draws}
+\end{subitemize}
+\end{itemize}
+
+\mypart{Bayesian Methodology}{}
+
+\sld{Probabilities quantify epistemic uncertainty}
+\begin{quote}
+\footnotesize 
+% Given for one instance an \myemph{intelligence which could comprehend all the forces by which nature is animated} and the respective situation of the beings who compose it---an intelligentce sufficiently vast to submit these data to analysis---it would embrace in the same formula the movements of the greatest bodies of the universe and those of the lightest atom; for it, nothing would be uncertain and the future, as the past, would be present to its eyes.
+
+The curve described by a simple molecule of air or vapor is regulated in a manner just as certain as the planetary orbits;  the \myemph{only difference} between them is that which comes from \myemph{our ignorance}.
+
+\myemph{Probability is relative}, in part to this ignorance, in part \myemph{to our knowledge}.
+\\ \mbox{ } \hfill {\scriptsize ---\myemph{Pierre-Simon Laplace, 1814}, {\slshape A Philosophical Essay on Probability.}}
+\end{quote}
+%
+\begin{quote}
+\footnotesize
+Every event is \myemph{in itself certain}, not probable; if we knew all, we should either know positively that it will happen, or positively that it will not.
+\\[6pt]
+We must remember that \myemph{the probability of an event is not a quality of the event itself}, but a mere name for the degree of ground which we, or some one else, have for expecting it.
+\\[6pt]
+... its probability to us means the \myemph{degree of expectation of its occurrence}, which we are warranted in entertaining by our present evidence.
+\\ \mbox{ } \hfill {\scriptsize ---\myemph{John Stuart Mill, 1882}, {\slshape A System of Logic.} 8th Ed.}
+\end{quote}
+
+
+\sld{Statistical reasoning is counterfactual}
+
+\begin{itemize}
+\item We ask, \myemph{what is the probabilty an event occurred?}
+\item We do this \myemph{even if we know the outcome}.
+\item We treat \myemph{observed and unobserved events symmetrically}.
+\end{itemize}
+
+
+
+\sld{Random variables \large (a la Gelman and Hill)}
+%
+\begin{itemize}
+\item Imagine an urn filled with balls, each \myemph{recording the numerical value of every random variable}.
+  \begin{subitemize}
+  \item A random variable is a mapping from balls to values.
+  \item One ball represents the \myemph{real world}, but we don't know which.
+  \end{subitemize}
+\vfill
+\item Or imagine \myemph{seeding a pseudorandom number generator}.
+  \begin{subitemize}
+  \item Given a \myemph{fixed seed}, the \myemph{sequence of pseudorandom numbers is determinstic}.
+  \item A pseudorandom variable is a mapping from seeds to values, e.g., \texttt{rnorm()} in R.
+  \end{subitemize}
+\vfill
+\end{itemize}
+
+
+\sld{Examples of random variables}    
+\begin{itemize}
+\item the sum of the three best among a roll of four six-sided dice
+\item the time before the next traffic accident on a given highway
+\item the prevalence of a disease in a population
+\item the ability of a student to answer exam questions
+\vfill
+\item \myemph{Frequentist statistics} only uses random variables for \myemph{observable quantities} in a sequence, with probability defined as long-term sequence probability.
+\item \myemph{Bayesian statistics} uses random variables for \myemph{unobservable latent values, too.}
+\end{itemize}
+
+
+\sld{Events}
+%
+\begin{itemize}
+\item An \myemph{event} is a something that can occur or not occur.
+\item Events the main \myemph{bearers of probability} in statistics.
+\item Events are modeled as a \myemph{subset of outcomes}
+\item Events typically picked out by a \myemph{range of random variable values}, e.g.,
+\begin{subitemize}
+\item the prevalence of disease is greater than 2\%, i.e., $\lambda > 0.02$
+\item education scheme one is better than scheme two, i.e., $\theta_1 >
+  \theta_2$
+\item the outcome of a game between A and B is that A wins by more than 5 points
+\end{subitemize}
+\item The \myemph{probabilty of an event} is the probabiltiy that the random variable takes on a value in the chosen set, e.g., $\Pr[\lambda > 0.02]$.
+\end{itemize}
+
+
+\sld{Probability is conditional on knowledge}
+%
+\begin{itemize}
+\item What is probability a man is \myemph{taller than 6'}?
+\begin{subitemize}
+\item What if I tell you he's Dutch?
+\item What if I tell you he's a professional athlete?
+\item What if I tell you he's a jockey?  or a basketball player?
+\item What if I tell you his mother is taller than 6'?
+\end{subitemize}
+\item What is the probaiblity of \myemph{rain this afternoon} in Edinburgh?
+  \begin{subitemize}
+\item What if I tell you it's April?
+\item What if I tell you it has been raining all morning?
+\end{subitemize}  
+\end{itemize}
+
+
+\sld{Bayesian data analysis}
+%
+\begin{itemize}
+\item ``By {Bayesian data analysis}, we mean {practical methods}
+  for making {inferences} from {data} using {probability models}
+  for quantities we {observe} and about which we {wish to learn}.''
+  %
+\item ``The essential characteristic of Bayesian methods is
+  their \myemph{explicit use of probability for quantifying uncertainty}
+  in inferences based on statistical analysis.''
+\end{itemize}
+%
+\vfill\hfill{\footnotesize Gelman et al., {\slshape Bayesian Data Analysis},
+  3rd edition, 2013}
+
+
+\sld{Bayesian workflow}
+%
+\begin{itemize}
+\item Set up \myemph{full probability model}
+  \vspace*{-4pt}
+  \begin{itemize}
+  \item for \myemph{all} observable \& unobservable quantities
+  \item consistent w. problem knowledge \& data collection
+  \end{itemize}
+  %
+\item \myemph{Condition} on observed data (where Stan comes in)
+  \vspace*{-4pt}
+  \begin{itemize}
+  \item to calculate posterior probability of unobserved quantities
+    (e.g., parameters, predictions, missing data)
+  \end{itemize}
+  %
+\item \myemph{Evaluate} (where Stan sticks around)
+  \vspace*{-4pt}
+  \begin{itemize}
+  \item model fit and implications of posterior
+  \end{itemize}
+\vfill
+\item \myemph{Repeat} as necessary
+\end{itemize}
+\vfill\hfill {\footnotesize {\slshape Ibid.}}
+
+
+\sld{Priors and likelihoods}
+%
+\begin{itemize}
+\item We factor joint models into priors and data generating model (more later).
+\item The \myemph{prior} is what we know about latent parameters before we see the data.
+\item The \myemph{data generating model} gneerates observable data given parameters.
+  \begin{subitemize}
+  \item Considered as a function of the parameters for fixed data, the data generating model
+    defines the \myemph{likelihood function}.
+  \end{subitemize}
+\item Both priors and likelihoods are guided by our \myemph{knowledge}. 
+\item Both prior and likelihood are \myemph{equally ``subjective''}.
+  \begin{subitemize}
+  \item Conclusions are typically \myemph{way more sensitive to the likelihood}.
+  \item \myemph{``Don't strain at the gnat of prior while swallowing the camel of the
+      likelihood.''} (Andrew Gelmans' blog)
+  \end{subitemize}
+\end{itemize}  
+
+\sld{Where do models come from?}
+%
+\begin{itemize}
+\item Sometimes model comes first, based on substantive
+  considerations
+\begin{subitemize}
+\item toxicology, economics, ecology, physics, \ldots
+\end{subitemize}
+\item Sometimes model chosen based on data collection
+\begin{subitemize}
+\item  traditional statistics of surveys and experiments
+\end{subitemize}
+\item Other times the data comes first
+\begin{subitemize}
+\item observational studies, meta-analysis, \ldots
+\end{subitemize}
+\hfill
+\item Usually its a mix
+\end{itemize}
+
+
+\sld{Model checking}
+%
+\begin{itemize}
+\item Do the inferences make sense?
+\begin{subitemize}
+\item are parameter values consistent with model's prior?
+\item does simulating from parameter values produce reasonable fake
+  data?
+\item are marginal predictions consistent with the data?
+\end{subitemize}
+\item Do predictions and event probabilities for new data make sense?
+\vfill
+\item {\slshape \myemph{Not}}: Is the model true?
+\item {\slshape \myemph{Not}}: What is Pr[model is true]?
+\item {\slshape \myemph{Not}}: Can we ``reject'' the model?
+\end{itemize}
+
+
+\sld{Model improvement}
+%
+\begin{itemize}
+\item Expanding the model
+\begin{subitemize}
+\item hierarchical and multilevel structure \ldots
+\item more flexible distributions (overdispersion, covariance)
+\item more structure (geospatial, time series)
+\item more modeling of measurement methods and errors
+\item \ldots
+\end{subitemize}
+\item Including more data
+\begin{subitemize}
+\item breadth (more predictors or kinds of observations)
+\item depth (more observations)
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Properties of Bayesian inference}
+%
+\begin{itemize}
+\item Explores full range of parameters consistent with prior info and
+  data$^*$
+\begin{subitemize}
+\item $^*$ if such agreement is possible
+\item Stan automates this procedure with diagnostics
+\end{subitemize}
+\item Inferences can be plugged in directly for
+\begin{subitemize}
+\item parameter estimates minimizing expected error
+\item predictions for future outcomes with uncertainty
+\item event probability updates conditioned on data
+\item risk assessment / decision analysis conditioned on uncertainty
+\end{subitemize}
+\end{itemize}
+
+
+\sld{\Large All models are wrong, but some are useful}
+%
+\begin{itemize}
+\item This has to be one of the \myemph{highest impact section titles} ever!
+\end{itemize}
+%
+\begin{quote}
+  \hspace*{-5pt}{\Large``}Now it would be \myemph{very remarkable} if any system existing in the real
+  world could be \myemph{exactly represented} by any simple model. However,
+  cunningly chosen \myemph{parsimonious models} often do provide remarkably
+  \myemph{useful approximations}.{\Large''}
+\\
+\mbox{ } \hfill {\small --- \myemph{George Box} (1979)}
+\end{quote}
+\vfill
+\hfill {\tiny Box, G. E. P. 1979. Robustness in the strategy of
+  scientific model building.  In
+  {\slshape Robustness in Statistics}, Academic Press.}
+
+
+\sld{Model (mis)specification}
+%
+\begin{itemize}
+\item A model is \myemph{well specified} if it matches the data-generating
+  process of the data.
+\item All of our models will be \myemph{misspecified} to some extent
+\begin{subitemize}
+\item well specified: Newtonian physics (terrestrial)
+\item mildly misspecified: Newtonian physics (solar scale)
+\item wildly mispsecified: Newtonian physics (near speed of light)
+\item wildly misspecified: social science regression 
+\end{subitemize}
+\item Models assumptions and predictions must be \myemph{tested}
+\begin{subitemize}
+\item ideally with \myemph{cross-validation} on quantities of interest
+\end{subitemize}
+\end{itemize}
+
+
+\sld{The folk theorem}
+%
+\begin{quote}
+\hspace*{-5pt}{\Large``}When you have computational problems, often there's a
+problem with your model.{\Large''}
+\\[4pt]
+\mbox{ } \hfill {\small --- Andrew Gelman (2008)}
+\end{quote}
+\begin{itemize}
+\item The usual culprits are
+\begin{subitemize}
+\item bugs in: samplers, data munging, model coding, etc.
+\item model misspecification
+\end{subitemize}
+\end{itemize}
+\vfill
+\hfill
+{\footnotesize \url{http://andrewgelman.com/2008/05/13/the_folk_theore/}}
+
+
+\sld{Model calibration}
+%
+\begin{itemize}
+\item Consider 100 days for which a meteorologist predicted a 70\%
+  chance of rain
+\begin{subitemize}
+\item about 70 of them should have had rain
+\item not fewer, not more!
+\item technically, expect $\mathsf{Binomial}(100, 0.7)$ rainy day from
+  a calibrated model
+\end{subitemize}
+\item Use posterior predictive checks to test calibration on
+\begin{subitemize}
+\item training data---can it fit?
+\item held out data---can it predict?
+\item cross-validation---approximates held out with trainin data
+\end{subitemize}
+\item Also applies to interval coverage of parameter values
+\end{itemize}
+
+\sld{Model sharpness}
+%
+\begin{itemize}
+\item Ideal forecasts are deterministic
+\begin{subitemize}
+\item predict 100\% chance of rain or 0\% chance of rain
+\item always right
+\end{subitemize}
+%
+\item A forecast of 90\% chance of rain reduces uncertainty more than a 50\% prediction
+\item A model is \myemph{sharp} if it has narrow posterior intervals
+\begin{subitemize}
+\item Prediction $\mbox{Pr}[\alpha \in (1.2, 1.9)] = 0.9$
+\item is sharper than $\mbox{Pr}[\alpha \in (1, 2)] = 0.9$
+\end{subitemize}
+\item I.e., sharper models are more certain in its predictions
+\item Given calibration, we want our predictions to be \myemph{sharp}
+\end{itemize}
+
+
+\sld{Cross-validation}
+%
+\begin{itemize}
+\item Uses single data set to model held-out performance
+\item Assumes stationarity (as most models do)
+\item Partition data evenly into disjoint subsets (called \myemph{folds})
+\begin{subitemize}
+\item 10 is a common choice
+\item \myemph{leave-one-out} (LOO) uses a the number of training
+  data points
+\end{subitemize}
+\item For each fold
+\begin{subitemize}
+\item estimate model on all data but that fold
+\item test on that fold
+\end{subitemize}
+\item Usual comparison statistic is held out log likelihood
+\end{itemize}
+
+
 
 \end{document}
