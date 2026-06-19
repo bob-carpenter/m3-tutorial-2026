@@ -814,6 +814,365 @@ problem with your model.{\Large''}
 \item Usual comparison statistic is held out log likelihood
 \end{itemize}
 
+\mypart{Bayesian Inference}{}
+
+
+\sld{Notation for Basic Quantities}
+%
+\begin{itemize}
+\item \myemph{Basic Quantities}
+\begin{subitemize}
+\item $y$: \ observed data
+\item $\theta$: \ parameters (and other unobserved quantities)
+\item $x$: \ constants, predictors for conditional (aka ``discriminative'') models
+\end{subitemize}
+\item \myemph{Basic Predictive Quantities}
+\begin{subitemize}
+\item $\tilde{y}$: unknown, potentially observable quantities
+\item $\tilde{x}$: \ constants, predictors for unknown quantities
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Naming Conventions}
+%
+\begin{itemize}
+\item \myemph{Joint}: \ $p(y,\theta)$
+\item \myemph{Sampling / Likelihood}: \ $p(y|\theta)$
+\begin{subitemize}
+\item Sampling is function of $y$ with $\theta$ fixed (prob function)
+\item Likelihood is function of $\theta$ with $y$ fixed (\emph{not} prob function)
+\end{subitemize}
+\item \myemph{Prior}: \ $p(\theta)$
+\item \myemph{Posterior}: \ $p(\theta|y)$
+\item \myemph{Data Marginal (Evidence)}: \ $p(y)$
+\item \myemph{Posterior Predictive}: \ $p(\tilde{y}|y)$
+\end{itemize}
+
+
+\sld{Bayes's Rule for Posterior}
+%
+\vspace*{-4pt}
+\begin{eqnarray*}
+    p(\theta|y)
+    & = & \frac{p(y,\theta)}{p(y)}
+          \hspace*{64pt} \text{\small [def of conditional]}
+    \\[6pt]
+    & = & \frac{p(y|\theta) \, p(\theta)}{p(y)}
+          \hspace*{44pt} \text{\small [chain rule]}
+    \\[6pt]
+    & = & \frac{p(y|\theta) \, p(\theta)}{\int_{\Theta} p(y,\theta') \ d\theta'}
+          \hspace*{40pt} \text{\small [law of total prob]}
+    \\[6pt]
+    & = & \frac{p(y|\theta) \, p(\theta)}{\int_{\Theta} p(y|\theta') \,
+      p(\theta') \ d\theta'}
+          \hspace*{20pt} \text{\small [chain rule]}
+\end{eqnarray*}
+
+\begin{itemize}
+\item \myemph{Inversion:} Final result \myemph{depends only} on
+  \myemph{sampling distribution} (likelihood) $p(y|\theta)$ and \myemph{prior}
+  $p(\theta)$
+\end{itemize}
+
+
+\sld{Bayes's rule up to proportion}
+%
+\begin{itemize}
+\item If data $y$ is fixed, then
+\begin{eqnarray*}
+p(\theta|y)
+& = & \frac{p(y|\theta) \, p(\theta)}{p(y)}
+\\[6pt]
+& \propto & p(y|\theta) \, p(\theta)
+\\[6pt]
+& = & p(y,\theta)
+\end{eqnarray*}
+\item Posterior proportional to likelihood times prior.
+\item Equivalently, posterior proportional to joint.
+\vfill
+\item Avoids the nasty integral in the denominator for data marginal $p(y)$.
+\end{itemize}
+
+
+\sld{Posterior predictive distribution}
+%
+\begin{itemize}
+\item Predict new data $\tilde{y}$ based on observed data $y$
+\item Marginalize parameters $\theta$ out of posterior and likelihood
+\begin{eqnarray*}
+p(\tilde{y} \mid y)
+& = & \mathbb{E}[p(\tilde{y} | \theta) \mid Y = y]
+\\[6pt]
+& = &
+\int p(\tilde{y} | \theta) \, p(\theta | y) \, d\theta.
+\end{eqnarray*}
+\item Weights predictions $p(\tilde{y}|\theta)$,
+by posterior $p(\theta|y)$
+\item Integral notation shorthand for sums and/or integrals
+\end{itemize}
+
+
+\sld{Posterior event probabilities}
+%
+\begin{itemize}
+\item Recall that an event $A$ is a collection of outcomes
+\item So $A$ may be defined by an indicator $f$ on parameters
+\[
+f(\theta)
+=
+\begin{cases}
+1 & \text{if } \theta \in A
+\\
+0 & \text{if } \theta \not\in A
+\end{cases}
+\]
+\begin{subitemize}
+\item $f(\theta) = \mathrm{I}(\theta_1 > \theta_2)$
+\ \ for \ \ $\Prob{\theta_1 > \theta_2 \, | \, y}$,
+\item $f(\theta) = \mathrm{I}(\theta \in (0.50, 0.52)$ for $\mathrm{Pr}\left[ \theta \in (0.50, 0.52) \,|\, y \right]$
+\end{subitemize}
+\item Defined by posterior expectation of indicator $f(\theta)$
+\[
+\mathrm{Pr}[A \,|\, y]
+\ = \
+\mathbb{E}\left[ f(\theta) \, | \, y \right]
+\ = \
+\int_{\Theta} f(\theta) \, p(\theta|y) \, d\theta.
+\]
+\end{itemize}
+
+
+\mypart{Monte Carlo methods}{for solving high-dimensional integrals}
+
+\sld{Monte Carlo methods}
+\begin{itemize}
+\item Bayesian inference involves \myemph{high-dimensional integrals}.
+\item \myemph{Monte Carlo} methods \myemph{estimate} such integrals using probability.
+\item Specifically, suppose we want to calculate a \myemph{posterior expectation},
+  $$
+  \mathbb{E}[f(\theta) \mid y]
+  = \int_\Theta f(\theta) \cdot p(\theta \mid y) \textrm{d}y.
+  $$
+  with respect to a distribution $\theta \sim p(\theta \mid y)$.
+\item Suppose we can \myemph{randomly sample} $\drw{\theta}{m} \sim p(\theta \mid y)$
+\item Then we can use a plug-in \myemph{Monte Carlo estimate},
+  $$
+  \mathbb{E}[f(\theta) \mid y]
+  \approx \frac{1}{M} \sum_{m=1}^M f(\drw{\theta}{m}).
+  $$
+\end{itemize}
+
+
+\sld{Stan samples from the posterior}
+%
+\begin{itemize}
+%
+\item Stan's primary mode of operation is \myemph{sampling from a Bayesian posterior}
+\item Specifically, Stan will draw a \myemph{posterior sample} of size $M$,
+\[
+\theta^{(1)}, \ldots, \theta^{(M)} \sim p(\theta \mid y).
+\]
+\item Stan uses \myemph{Markov chain Monte Carlo}
+  \begin{subitemize}
+  \item the sequence of draws is not independent
+  \item it usually has positive autocorrelation
+  \item in simple models, autocorrelation can be negative
+  \end{subitemize}
+\item Specifically, the \myemph{no-U-turn sampler} (NUTS), a form of \myemph{Hamiltonian Monte Carlo}
+  \begin{subitemize}
+  \item NUTS/HMC has the best known scaling in dimension among generic samplers.
+  \end{subitemize}
+\end{itemize}
+
+\sld{Parameter estimation}
+\begin{itemize}
+\item Parameter estimates are posterior expectations (means)
+  \[
+\widehat{\theta}
+\ = \
+\mathbb{E}[\theta \mid y]
+\ = \
+\int \theta \cdot p(\theta \mid y) \, \mathrm{d}\theta
+\ \approx \
+\frac{1}{M} \sum_{m=1}^M \theta^{(m)}
+\]
+%
+\begin{subitemize}
+\item Posterior mean \myemph{minimizes expected square error}.
+\item Posterior median \myemph{minimizes expected absolute error}.
+\end{subitemize}
+\end{itemize}
+
+\sld{Parameter (co)variance estimation}
+%
+\begin{itemize}
+% \item Given \myemph{posterior mean} estimates $\widehat{\theta}$ as above.
+\item Posterior \myemph{parameter variance} estimates for univariate $\theta$ are 
+\begin{align*}
+\mathrm{var}[\theta \mid y]
+\ &= \
+    \mathbb{E}\!\left[ (\theta - \widehat{\theta})^2 \right]
+\\
+\ &\approx \
+\frac{1}{M} \sum_{m=1}^M \left(\theta^{(m)} - \widehat{\theta}\,\right)^2
+\end{align*}
+\item Posterior \myemph{parameter covariance} estimation for multivariate $\theta$ is similar,
+\begin{align*}
+  \mathrm{cov}[\theta \mid y]
+  &= \mathbb{E}\!\left[(\theta - \widehat{\theta}\,) \cdot
+      (\theta - \widehat{\theta}\,)^\top\right]
+  \\ &\approx
+  \frac{1}{M} \sum_{m=1}^M \left(\theta^{(m)} - \widehat{\theta}\,\right)
+                          \cdot \left(\theta^{(m)} - \widehat{\theta}\,\right)^\top.
+\end{align*}
+\end{itemize}
+
+\sld{Posterior event proabilities}
+%
+\begin{itemize}
+\item Posterior \myemph{event probabilities} are computed similarly
+\begin{align*}
+\mbox{Pr}[\mbox{cond}(\theta) \mid y]
+&=
+\int \mathrm{I}[\theta \in A] \cdot p(y \mid \theta) \, \mathrm{d}\theta
+\\
+&\approx
+\frac{1}{M} \sum_{m=1}^M \mathrm{I}[\theta^{(m)} \in A].
+\end{align*}
+%
+\item The \myemph{indicator function} $\mathrm{I}[\theta \in A]$ evaluates to 1 if $\theta$ satisfies the event $A$, and evaluates to 0 otherwise.
+  \begin{subitemize}
+  \item i.e., {\slshape event probabilities are expectations of indicator functions.}
+  \end{subitemize}
+\end{itemize}
+
+\sld{Posterior predictive densities}
+\begin{itemize}
+\item Evaluating the \myemph{posterior predictive density} is another expectation,
+%
+\begin{align*}
+p(\tilde{y} \mid y)
+& = \mathbb{E}[p(\tilde{y}) \mid y]
+\\
+&\approx
+\frac{1}{M} \sum_{m=1}^M p\left( \tilde{y} \mid \theta^{(m)} \right)
+\end{align*}
+%
+\item \myemph{Sampling} from the posterior predictive requires random number generation,
+  \[
+    \drw{\tilde{y}}{m} \sim p(\tilde{y} \mid \drw{\theta}{m})
+  \]
+\item \myemph{Two forms of uncertainty} compound for posterior predictive,
+  \begin{subitemize}
+  \item \myemph{estimation uncertainty} for $\theta$ given data $y$ represented by $\drw{\theta}{m} \sim p(\theta \mid y)$
+  \item \myemph{data generation uncertainty} due to sampling $\drw{tilde{y}}{m} \sim p(\tilde{y} \mid \drw{\theta}{m}$
+    \end{subitemize}
+\end{itemize}
+
+\sld{Posterior quantiles}
+\begin{itemize}
+\item Posterior \myemph{quantiles} (e.g., \myemph{intervals} and \myemph{median}) just use the empirical quantiles of the draws,
+\[
+\mathrm{quantile}(\theta, \alpha)
+\ = \
+\mathrm{sort}(\drw{\theta}{1:M})
+\left[\strut \, \lceil \alpha \times M \rceil \, \right]
+\]
+\item As $\alpha$ approaches 0 or 1, the number of draws beyond $\alpha$ shrinks and
+  \myemph{estimation uncertainty increases dramatically}.
+  \begin{subitemize}
+  \item e.g., a 2.5\% quantile defining the ends of a central 95\% interval
+    has around 2.5 times as much uncertainty (coincidental that it's 2.5 and 2.5\%) as a mean.
+  \end{subitemize}
+\end{itemize}
+
+
+\mypart{Bayesian comparisons}{}
+
+\sld{Bayesian ``Fisher Exact Test''}
+%
+\vspace*{-4pt}
+\begin{itemize}
+\item Suppose we observe the following \myemph{data on handedness vs.\ sex}.
+\begin{center}
+{\small
+\begin{tabular}{c|c|c||c}
+     & {\slshape sinister} & {\slshape dexter} & TOTAL
+\\ \hline \hline
+{\slshape male} & 9 ($y_1$) & 43 & 52 ($N_1$)
+\\
+{\slshape female} & 4 ($y_2$) & 44 & 48 ($N_2$)
+\end{tabular}
+}
+\end{center}
+\item Assume \myemph{data generating model} $\distro{Binomial}(y_k \mid N_k,\theta_k)$, uniform
+  priors
+\item \myemph{Scientific question:} Are men more likely to be lefthanded?
+{\small
+\begin{eqnarray*}
+\Prob{\theta_1 > \theta_2 \, | \, y, N}
+& = &
+\int_{\Theta} \indicator{\theta_1 > \theta_2} \, p(\theta|y,N) \,
+d\theta
+\\[4pt]
+& \approx & \frac{1}{M} \sum_{m=1}^M \indicator{\theta_1^{(m)} > \theta_2^{(m)}}.
+\end{eqnarray*}
+}
+\end{itemize}
+
+
+\sld{Stan Binomial Comparison}
+%
+\begin{stancode}
+data {
+  int y[2];
+  int N[2];
+}
+parameters {
+  vector<lower=0,upper=1> theta[2];
+}
+model {
+  y ~ binomial(N, theta);
+}
+generated quantities {
+  real boys_minus_girls = theta[1] - theta[2];
+  int boys_gt_girls = theta[1] > theta[2];
+}
+\end{stancode}
+
+
+\sld{Binomial Comparison Results}
+%
+\begin{codeout}
+                   mean    2.5%  97.5%
+theta[1]           0.22    0.12   0.35
+theta[2]           0.11    0.04   0.21
+boys_minus_girls   0.12   -0.03   0.26
+boys_gt_girls      0.93    0.00   1.00
+\end{codeout}
+\begin{itemize}
+\item
+$\mathrm{Pr}[\theta_1 > \theta_2 \,|\, y] \approx 0.93$
+\item
+$\mathrm{Pr}\left[
+(\theta_1 - \theta_2) \in (-0.03, 0.26)
+\,|\, y
+\right]
+\, = \, 95\%$
+\end{itemize}
+
+
+\sld{Visualizing Posterior Difference}
+%
+\begin{itemize}
+\item Plot of posterior difference, $p(\theta_1 - \theta_2 \, | \, y,
+  N)$ (men - women)
+\begin{center}
+\includegraphics[height=1.5in]{img/lefty-posterior.pdf}
+\end{center}
+\item Vertical bars: central 95\% posterior interval $(-0.03,0.26)$
+\end{itemize}
 
 
 \end{document}
