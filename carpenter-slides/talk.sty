@@ -1,4 +1,4 @@
-\usepackage{sourcecodepro}
+\usepackage[scale=0.8]{sourcecodepro}
 \usepackage{mathpazo}
 \renewcommand{\sfdefault}{lmss} % override sourcecodepro with Latin
                                 % Modern Sans
@@ -56,6 +56,7 @@
     \spc{\Huge\myemph{#1}}
     \\
     \spc\qquad\hrule
+    \vspace*{12pt}
     \spc\LARGE\myemph{#2}
     \vfill\vfill\null}
 
@@ -63,8 +64,8 @@
 \newenvironment{subitemize}{\vspace*{-4pt}\begin{itemize}\small}{\end{itemize}}
 \newenvironment{subsubitemize}{\begin{itemize}\footnotesize}{\end{itemize}}
 \DefineVerbatimEnvironment{codeout}{Verbatim}{fontsize=\normalsize,fontshape=sl,xleftmargin=0.225in}
-\DefineVerbatimEnvironment{codein}{Verbatim}{fontsize=\normalsize,xleftmargin=0.225in}
-\DefineVerbatimEnvironment{stancode}{Verbatim}{fontsize=\small,xleftmargin=0.225in,baselinestretch=1.1}
+\DefineVerbatimEnvironment{codein}{Verbatim}{fontsize=\normalsize,xleftmargin=0.25in}
+\DefineVerbatimEnvironment{stancode}{Verbatim}{fontsize=\small,xleftmargin=0.25in}
 \DefineVerbatimEnvironment{smallstancode}{Verbatim}{fontsize=\footnotesize,xleftmargin=0.1125in,baselinestretch=1.02}
 
 \newcommand{\bigoh}[1]{{\mathcal{O}}(#1)}

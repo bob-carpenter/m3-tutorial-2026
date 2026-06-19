@@ -232,7 +232,7 @@ generated quantities {
 \end{subitemize}
 \end{itemize}
 
-\mypart{Bayesian Methodology}{}
+\mypart{What is Probability?}{}
 
 \sld{Probabilities quantify epistemic uncertainty}
 \begin{quote}
@@ -254,16 +254,6 @@ We must remember that \myemph{the probability of an event is not a quality of th
 ... its probability to us means the \myemph{degree of expectation of its occurrence}, which we are warranted in entertaining by our present evidence.
 \\ \mbox{ } \hfill {\scriptsize ---\myemph{John Stuart Mill, 1882}, {\slshape A System of Logic.} 8th Ed.}
 \end{quote}
-
-
-\sld{Statistical reasoning is counterfactual}
-
-\begin{itemize}
-\item We ask, \myemph{what is the probabilty an event occurred?}
-\item We do this \myemph{even if we know the outcome}.
-\item We treat \myemph{observed and unobserved events symmetrically}.
-\end{itemize}
-
 
 
 \sld{Random variables \large (a la Gelman and Hill)}
@@ -296,39 +286,274 @@ We must remember that \myemph{the probability of an event is not a quality of th
 \end{itemize}
 
 
+\sld{Probability is conditional on knowledge}
+%
+\begin{itemize}
+\item What is probability a man is \myemph{taller than 6'}? 
+\begin{subitemize}
+\item What if I tell you he's Dutch? 
+\item What if I tell you he's a professional athlete? 
+\item What if I tell you he's a jockey?  or a basketball player? 
+\item What if I tell you his mother is taller than 6'? 
+\end{subitemize}
+\item What is the probaiblity of \myemph{rain this afternoon} in Edinburgh? 
+  \begin{subitemize}
+\item What if I tell you it's April? 
+\item What if I tell you it has been raining all morning? 
+\end{subitemize}  
+\end{itemize}
+
+
 \sld{Events}
 %
 \begin{itemize}
 \item An \myemph{event} is a something that can occur or not occur.
 \item Events the main \myemph{bearers of probability} in statistics.
-\item Events are modeled as a \myemph{subset of outcomes}
-\item Events typically picked out by a \myemph{range of random variable values}, e.g.,
+\item An event is defined by \myemph{a property of random variables} (i.e., a subset of the balls in the urn), e.g., 
 \begin{subitemize}
 \item the prevalence of disease is greater than 2\%, i.e., $\lambda > 0.02$
 \item education scheme one is better than scheme two, i.e., $\theta_1 >
   \theta_2$
-\item the outcome of a game between A and B is that A wins by more than 5 points
 \end{subitemize}
-\item The \myemph{probabilty of an event} is the probabiltiy that the random variable takes on a value in the chosen set, e.g., $\Pr[\lambda > 0.02]$.
+\item The \myemph{probabilty of an event} is the probabiltiy that the random
+  variables take on values that satisfy the property defining the event,
+  \begin{subitemize}
+  \item for the event $\lambda > 0.02$, the value $\Pr[\lambda > 0.02]$ is the probability
+    that the random variable $\lambda$ takes on a value greater than 0.02 (i.e., the probability that a random ball choosen from the urn has $\lambda > 0.02$).
+  \end{subitemize}
 \end{itemize}
 
 
-\sld{Probability is conditional on knowledge}
+\mypart{Laplace's probem}{aka, the first Bayesian posterior}
+
+
+\sld{Birth rate by sex}
+\begin{itemize}
+\item \myemph{Laplace}'s data on live births in Paris from 1745--1770:
+\vspace*{-4pt}
+\begin{center}\small
+\begin{tabular}{c|c}
+{\slshape sex} & {\slshape live births}
+\\ \hline
+female & 241\,945
+\\
+male & 251\,527
+\end{tabular}
+\end{center}
+\item \myemph{Laplace's first question} (Estimation)
+\\
+What is the birth rate of boys vs. girls?
+
+\item \myemph{Laplace's second question} (Event Probability)
+\\
+Is a boy more likely to be born than a girl?
+%
+\item Bayes (1763) set up the ``Bayesian'' model
+\item Laplace (1781, 1786) solved for the posterior
+\end{itemize}
+
+
+\sld{Bernoulli distribution}
 %
 \begin{itemize}
-\item What is probability a man is \myemph{taller than 6'}?
-\begin{subitemize}
-\item What if I tell you he's Dutch?
-\item What if I tell you he's a professional athlete?
-\item What if I tell you he's a jockey?  or a basketball player?
-\item What if I tell you his mother is taller than 6'?
-\end{subitemize}
-\item What is the probaiblity of \myemph{rain this afternoon} in Edinburgh?
-  \begin{subitemize}
-\item What if I tell you it's April?
-\item What if I tell you it has been raining all morning?
-\end{subitemize}  
+\item The \myemph{Bernoulli distribution} has a binary outcome $y \in \{ 0, 1 \}$,
+  with 1 conventionally denoting ``success.''
+\item The probability $y$ is 1, written $\Pr[y = 1]$, is defined to be $\theta \in (0,1)$, so
+$$
+  \distro{Bernoulli}(y \mid \theta)
+  = \begin{cases}
+    \theta & \textsf{if } y = 1,
+    \\
+    1 - \theta & \textsf{if } y = 0, \textsf{ and}
+    \\
+    0 & \textsf{otherwise}.
+    \end{cases}
+    $$
+  \item For example, if $y \in \{ 0, 1 \}$ is a fair coin flip, we write
+    $$
+    y \sim \distro{Bernoulli}(0.5)
+    $$
+    to indicate that the probability mass function of $y$ is $\distro{Bernoulli}(y \mid 0.5)$,
+    which follows from $\Pr[y = 1] = 0.5$.
 \end{itemize}
+
+
+\sld{Binomial distribution}
+%
+\begin{itemize}
+\item In $\distro{Binomial}(y \mid N, \theta)$,
+  $y$ is the \myemph{number of successes} in $N$ \myemph{independent trials}, where each trial has
+  a $\theta \in (0, 1)$ \myemph{chance of success}.
+\item If $y_1,\ldots,y_N\sim \distro{Bernoulli}(\theta)$,
+then $(y_1 + \cdots + y_N) \sim \distro{Binomial}(N,\theta)$.
+\item The \myemph{analytic form} is
+\[
+\distro{Binomial}(y \mid N,\theta)
+\ = \ \binom{N}{y} \cdot \theta^{y} \cdot (1 - \theta)^{N-y},
+\]
+where \myemph{binomial coefficient} $\binom{N}{y}$ is the \myemph{number of sequences} of 0s and 1s of length $N$ with exactly $y$ 1s.  
+\end{itemize}
+
+
+
+\sld{Beta distribution}
+%
+\begin{itemize}
+\item \myemph{Beta distributions} are used to \myemph{model probabilities} or proportions.
+\item For parameters $\alpha, \beta > 0$ and a \myemph{continuous outcome} $\theta \in (0,1)$, 
+\[
+\distro{Beta}(\theta \mid \alpha,\beta) 
+\ = \ \frac{1}{\Betafun(\alpha,\beta)}
+      \cdot \theta^{\alpha - 1} 
+      \cdot (1 - \theta)^{\beta-1}
+\]
+\item Euler's \myemph{Beta function} $\Betafun(\alpha, \beta)$ is required to \myemph{normalize}.
+\item \myemph{Uniform is a beta}:
+  $\distro{Uniform}(\theta\mid (0,1)) = \distro{Beta}(\theta \mid 1, 1) = $
+\item \myemph{Conujugacy} (Laplace): With a beta prior and binomial data generating
+  distribution, the posterior is a beta distribution.
+\end{itemize}
+
+
+\sld{Bayes's binomial model}
+%
+\begin{itemize}
+\item \myemph{Data}
+\begin{subitemize}
+\item $y$: total \myemph{number of male live births} (251,527)
+\item $N$ : total \myemph{number of live births} (493,472)
+\end{subitemize}
+\item \myemph{Parameter}: 
+$\theta \in (0,1)$ for the \myemph{proportion of male} live births
+\item \myemph{Prior}: $\theta \sim \distro{Beta}(1, 1)$
+\item \myemph{Data generating distribution}: $y \sim \distro{Binomial}(N, \theta)$
+\item \myemph{Joint density}: $p(y, \theta \mid N) = \distro{Binomial}(y \mid N, \theta)
+  \cdot \distro{Beta}(\theta \mid 1, 1)$
+\item \myemph{Posterior density}: $p(\theta \mid y) = \distro{Beta}(\theta \mid y + 1, N - y + 1)$
+\end{itemize}
+
+
+\sld{Example posteriors}
+%
+\vspace*{-4pt}
+\begin{itemize}
+\item Unnormalized posterior density assuming uniform prior and $y$
+  successes out of $n$ trials (all with mean 0.6). 
+\end{itemize}
+\begin{center}
+\includegraphics[height=1.6in]{img/bda-beta-plots.pdf}
+\end{center}
+\vspace*{-12pt}
+\hfill {\tiny Gelman et al. (2013) {\slshape Bayesian Data Analysis}, 
+  3rd Edition.}
+
+
+\sld{Estimation}
+%
+\begin{itemize}
+\item \myemph{Posterior} is $\distro{Beta}(\theta \, | \, 1 + 241\,945, \ 1 + 251\,527)$
+\item Posterior \myemph{mean}:
+\[
+\frac{1 + 251\,527}
+     {1 + 241\,945 + 1 + 251\,527}
+\approx 0.509708\underbrace{\bf 73}
+\]
+\item With uniform prior, \myemph{maximum likelihood estimate} is the \myemph{posterior mode},
+\[
+\frac{251\,527}
+     {241\,945 + 251\,527}
+\approx 0.509708\underbrace{\bf 82}.
+\]
+\item As number of observations approaches $\infty$, posterior mean approaches MLE.
+\end{itemize}
+
+
+\sld{Event probability}
+%
+\begin{itemize}
+\item What is probability that a male live birth is more probable?
+\begin{eqnarray*}
+\Prob{\theta > 0.5}
+& = &  \int_{\Theta} \indicator{\theta > 0.5} \, p(\theta \mid y,N) \textrm{d}\theta
+\\[4pt]
+  & \approx &  1 - 10^{-42}
+  \\[4pt]
+  & = & \textsf{\footnotesize 0.9999999999 9999999999 9999999999 9999999999 99}.
+\end{eqnarray*}
+\item $\indicator{\phi} = 1$ if condition $\phi$ is true and 0 otherwise. 
+\item  Laplace solved Bayes's integral by
+\begin{subitemize}
+\item determining that the posterior was a beta distribution (conjugacy!)
+\item and solving the normalization (gamma functions)
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Mathematics vs.\ Simulation}
+%
+\begin{itemize}
+\item Luckily, we don't have to be as \myemph{good at math} as Laplace.
+  \begin{subitemize}
+  \item though math, probability, and computational fluency helps immensely with statistics!
+  \end{subitemize}
+\item Nowadays, we \myemph{calculate integrals numerically} using 
+  tools like \myemph{Stan}. 
+\vfill 
+\begin{quote}\slshape 
+  If you wanted to do foundational research in statistics in the 
+  mid-twentieth century, you had to be bit of a mathematician, whether 
+  you wanted to or not. \ldots if you want to do statistical research 
+  at the turn of the twenty-first century, you have to be a computer 
+  programmer.  \\[3pt] \mbox{ } \hfill {\small ---from Andrew's blog}
+\end{quote}
+\end{itemize}
+
+\sld{Laplace's answer with Stan}
+%
+\begin{stancode}
+transformed data {
+  int<lower=0> male = 251527;
+  int<lower=0> female = 241945;
+}
+parameters {
+  real<lower=0, upper=1> theta;
+}
+model {
+  male ~ binomial(male + female, theta);
+}
+generated quantities {
+  int<lower=0, upper=1> theta_gt_half = (theta > 0.5);
+}
+\end{stancode}
+
+
+\sld{And the answer is...}
+%
+\begin{codein}
+> fit <- stan("laplace.stan", iter=100000);
+> print(fit, probs=c(0.005, 0.995), digits=3)
+\end{codein}
+\begin{codeout}
+                    mean   0.5%  99.5%
+theta               0.51  0.508  0.512
+theta_gt_half       1.00  1.000  1.000
+\end{codeout}
+%
+\begin{itemize}
+\item Q1: $\theta$ is 99\% certain to lie in $(0.508, 0.512)$.
+  \begin{subitemize}
+  \item i.e., $\Pr[\theta \in (0.508, 0.512) \mid \textrm{male}, \textrm{female}] = 0.99$.
+  \end{subitemize}
+%
+\item Q2:  Laplace ``morally certain'' boys more prevalent.
+  \begin{subitemize}
+    \item i.e., $\Pr[\theta > 0.5] \approx 1$.
+  \end{subitemize}
+\end{itemize}
+
+
+
+\mypart{Bayesian workflow}{}
 
 
 \sld{Bayesian data analysis}
@@ -375,12 +600,12 @@ We must remember that \myemph{the probability of an event is not a quality of th
 \vfill\hfill {\footnotesize {\slshape Ibid.}}
 
 
-\sld{Priors and likelihoods}
+\sld{Priors, data distributions, and likelihoods}
 %
 \begin{itemize}
 \item We factor joint models into priors and data generating model (more later).
 \item The \myemph{prior} is what we know about latent parameters before we see the data.
-\item The \myemph{data generating model} gneerates observable data given parameters.
+\item The \myemph{data generating model} generates observable data given parameters.
   \begin{subitemize}
   \item Considered as a function of the parameters for fixed data, the data generating model
     defines the \myemph{likelihood function}.
