@@ -1004,6 +1004,84 @@ f(\theta)
 \end{subitemize}
 \end{itemize}
 
+
+\sld{Monte Carlo Calculation of $\pi$}
+
+\noindent
+\begin{minipage}[t]{0.7\textwidth}
+\begin{itemize}
+\item Computing $\pi = 3.14\ldots$ via simulation is \emph{the} textbook application
+of Monte Carlo methods.
+\vfill
+\item Generate points \myemph{uniformly at random} within the square.
+\item Calculate \myemph{proportion within circle} and multiply by square's area to produce the area of the circle.
+\item This \myemph{circle's area} is $\pi$ (radius $r = 1$ yields area $\pi \cdot r^2 = \pi$).
+\item If $X, Y \sim \mathsf{Uniform}((-1, 1))$, then \\[4pt]
+  $\mathrm{Pr}[X^2 + Y^2 \leq 1] \ = \ \mathbb{E}\!\left[\textrm{I}[X^2 + Y^2 \leq 1]\right] = \pi / 4$. 
+\end{itemize}
+\end{minipage}
+%
+\hfill
+%
+\begin{minipage}[t]{0.25\textwidth}
+\vspace*{12pt}
+\hfill \includegraphics[height=\textwidth]{img/mc-integration-wikipedia.png}
+\\[4pt]
+{\tiny plot by Mysid Yoderj (Wikipedia)}
+\end{minipage}
+\vfill
+
+
+\sld{Calculating $\pi$ with Stan}
+%
+\begin{stancode}
+generated quantities {
+  real<lower=-1, upper=1> x = uniform_rng(-1, 1);
+  real<lower=-1, upper=1> y = uniform_rng(-1, 1);
+  int<lower=0, upper=1> in_circle = hypot(x, y) <= 1;
+  int<lower=0, upper=4> pi = 4 * in_circle;
+}
+\end{stancode}
+\begin{itemize}
+\item \myemph{Simulate} $X$ and $Y$
+\item \myemph{Indicator} \texttt{in\_circle} is 1 if $(x, y)$ is in the circle, 0 otherwise.
+\begin{subitemize}
+\item Stan's hypoteneuse function: \Verb|hypot(a, b) = sqrt(a^2 + b^2)|
+\end{subitemize}
+\item \myemph{Mulitply by 4} to get \texttt{pi}, which over multiple draws has \myemph{expectation $\pi$}.
+\end{itemize}
+
+\sld{Fitting Stan model with CmdStanPy}
+%
+\begin{codein}
+m = csp.CmdStanModel(stan_file = 'pi.stan')
+s = m.sample(iter_sampling=100_000)
+s.summary()  # trimmed by hand
+\end{codein}
+\begin{codeout}
+               Mean      MCSE
+pi         3.142900  0.002599
+\end{codeout}
+\begin{itemize}
+\item Our \myemph{estimate} is $\widehat{\pi} = 3.143$
+\item 0.0026 is our \myemph{standard error} (i.e., standard deviation of estimator error)
+\item Rough \myemph{95\% confidence interval} is $\textrm{mean} \pm\, 2 \cdot \textrm{mcse} = (3.138, 3.148)$.
+\item True value $\pi=3.141\cdots$ within that interval.
+\end{itemize}
+
+
+\sld{Accuracy of Markov chain Monte Carlo}
+%
+\begin{itemize}
+\item Monte Carlo Integration computes the exact posterior to within any $\epsilon$
+  \begin{subitemize}
+  \item i.e., it is \emph{not} an approximation of the posterior like variational Bayes or a Laplace approxiamtion
+    \end{subitemize}
+\item Monte Carlo draws are i.i.d. by definition, but MCMC draws are not
+\item Central limit theorem extends to MCMC: expected error decreases at rate of $\frac{1}{\sqrt{N}}$. 
+\item Need $100 \times$ larger sample for each digit of accuracy
+\end{itemize}
+
 \sld{Parameter (co)variance estimation}
 %
 \begin{itemize}
@@ -1173,6 +1251,11 @@ $\mathrm{Pr}\left[
 \end{center}
 \item Vertical bars: central 95\% posterior interval $(-0.03,0.26)$
 \end{itemize}
+
+
+
+
+\mypart{Models}
 
 
 \end{document}
