@@ -1306,6 +1306,28 @@ model {
 \end{stancode}
 \end{itemize}
 
+\sld{Stan's constrained parameters}
+\begin{itemize}
+\item Scale \texttt{sigma} declared \texttt{real<lower=0>} with
+  prior \Verb|sigma ~ lognormal(0, 1)|.
+  \begin{subitemize}
+  \item Stan provides \myemph{uniform} distribution over parameters \myemph{satisfying constraints}.
+  \item \myemph{user-defined priors} multiply-in as \myemph{factors}.
+  \item $\sigma \in (0, \infty)$ is \myemph{log-transformed} to $\tau = \log \sigma \in (-\infty, \infty)$ for \myemph{sampling}.
+  \item adjust for \myemph{change-of-variables} from $\sigma$ to $\tau$
+\end{subitemize}
+{\small
+\vspace*{-4pt}
+\begin{align*}
+p(\tau)
+&= p(\exp(\tau))
+   \cdot \left| \frac{\textrm{d}}{\textrm{d}\tau} \exp(\tau) \right|
+\\[4pt] &= p(\sigma) \cdot \exp(\tau)
+\\[4pt] &= \textrm{lognormal}(\exp(\tau) \mid 0, 1) \cdot \exp(\tau).
+\end{align*}
+}
+\end{itemize}
+
 \sld{Posterior predictive inference}
 %
 \begin{itemize}
@@ -1415,6 +1437,40 @@ model {
 }  
 \end{stancode}
 
+\sld{Autoregressive models}
+\begin{itemize}
+\item A \myemph{times series} is just a sequence of points $v_1, v_2, \ldots, v_T$.
+\item An \myemph{AR(1)} model regresses on the previous point in time for $t > 1$,
+  $$
+  v_t \sim \textrm{normal}(\alpha + \beta \cdot \alpha_{t-1}, \sigma).
+  $$
+\item If $\beta \in (-1, 1)$, then as $t \rightarrow \infty$, the \myemph{stationary} distribution is
+$$
+  v_t \sim \textrm{normal}\!\left(\frac{\alpha}{1 - \beta}, \frac{\sigma}{1 - \beta^2}\right).
+  $$
+\item An \myemph{AR(k)} model is just a linear regression on the previous k points.
+\end{itemize}
+
+\sld{Autorgression in Stan}
+\begin{itemize}
+\item We can have an autoregressive data distribution or prior; either way
+\end{itemize}
+\begin{stancode}
+vector[T] v;                                          // data or param
+  
+real alpha; real<lower=0, upper=1> beta;              // stationary param
+v[1] ~ normal(alpha / (1 - beta),                     // marginal
+              sigma / sqrt(1 - beta^2));              
+v[2:T] ~ normal(alpha + beta * v[1:(T - 1)], sigma);  // AR(1)
+\end{stancode}
+\begin{itemize}
+\item Last line is equivalent to
+\end{itemize}
+\begin{stancode}
+for (t in 2:T)
+  v[t] ~ normal(alpha + beta * v[t-1], sigma); 
+\end{stancode}
+
 
 \mypart{Crowdsourcing}
 
@@ -1431,7 +1487,7 @@ model {
   $$
 \item Elo (1960s) rediscovered a rescaled variant and proposed on online update
   \begin{subitemize}
-  \item update is via stochastic gradient descent (Robbins and Monro early 1950s).
+  \item update is via stochastic gradient descent (Robbins and Monro, early 1950s).
   \end{subitemize}
 \end{itemize}
 
@@ -1491,5 +1547,455 @@ vector[I] delta;
 ... 
 y ~ bernoulli_logit(delta .* (alpha[jj] - beta[ii]));  // .* elementwise
 \end{stancode}
+
+
+\mypart{Hierarchical Models}{for repeated binary trials}
+
+
+\sld{Baseball batting ability}
+%
+\begin{itemize}
+\item Batters have a number of ``at-bats'' in a season, out of which they
+  get a number of ``hits'' (hits are a good thing)
+  \begin{subitemize}
+  \item details not relevant
+  \item \myemph{same approach applies to} \myemph{clinical trials} (BDA), pediatric 
+  surgery complications (BUGS), reviews on Yelps, tests in multiple classrooms, $\ldots$
+\end{subitemize}
+\item No player with higher than 40\% success rate since 1950s
+  \begin{subitemize}
+  \item and then only \emph{slightly higher} than 40\% with \emph{low at-bats}
+  \end{subitemize}
+\item No player (excluding ``bowlers'') has success rate much less than 20\%.
+\end{itemize}
+
+
+\sld{Baseball data}
+%
+\\
+\begin{minipage}[t]{0.59\textwidth}
+\small
+\begin{itemize}
+\item (\myemph{top}) \myemph{Hits~vs.~at-bats} for 2006 American League (excluding pitchers)
+\item (\myemph{bottom}) \myemph{Average vs.\ at-bats}
+\begin{subitemize}
+\item blue line is pooled average (0.271) 
+\item red is +/- 2 binomial std devs 
+\end{subitemize}
+\vspace*{24pt}
+\item \myemph{Not much variation}; it's related to trials
+\item \myemph{Success rate increases} with number of trials
+  \begin{subitemize}
+  \item at-bats should be a covariate!
+  \end{subitemize}
+\end{itemize}
+\end{minipage}
+%
+\begin{minipage}[t]{0.40\textwidth}
+\begin{center}
+\vspace*{-36pt}
+\hfill \includegraphics[height=1.4in]{img/al06hitsvsatbats.png}
+\\[-18pt]
+\hfill \includegraphics[height=1.4in]{img/bball-eda.pdf}
+\end{center}
+\end{minipage}
+
+
+\sld{Pooling data (aka sharing strength)}
+%
+\begin{itemize}
+\item \myemph{How do we estimate} with a \myemph{small number of trials}? 
+  e.g., 6 hits in 10 at bats, or 0 in 5?
+  \begin{subitemize}
+  \item maximum likelihood estimates of 0.6 or 0.0 are \myemph{absurd}.
+  \end{subitemize}
+\item Same logic applies to players with 40 hits in 131 at bats or 152 hits in 537.
+\item \myemph{No pooling}: estimate each player separately (assume no similarities)
+\item \myemph{Complete pooling}: estimate all players together (assume no differences)
+\item \myemph{Partial pooling}: somewhere in the middle (let data decide)
+\begin{subitemize}
+\item use information about other players (i.e., the population) as warranted by the variation in the data
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Complete pooling model}
+%
+\begin{subitemize}
+\item Assume players all have \myemph{same ability} \texttt{phi}.
+  \begin{subitemize}
+  \item implicit uniform prior 
+  \end{subitemize}
+\begin{stancode}
+data {
+  int<lower=0> N;              // items
+  array[N] int<lower=0> K;     // trials
+  array[N] int<lower=0> y;     // successes
+}
+parameters {
+  real<lower=0, upper=1> phi;  // chance of success
+}
+model {
+  y ~ binomial(K, phi);        // likelihood
+}
+\end{stancode}
+\end{subitemize}
+
+
+\sld{No pooling model code}
+%
+\begin{subitemize}
+\item Assume each player has independent ability \texttt{phi[n]}.
+  \begin{subitemize}
+  \item implicit uniform prior 
+  \end{subitemize}
+\begin{stancode}
+data {
+  int<lower=0> N;
+  array[N] int<lower=0> K;
+  array[N] int<lower=0> y;
+}
+parameters {
+  vector<lower=0, upper=1>[N] phi;
+}
+model {
+  y ~ binomial(K, phi);
+}
+\end{stancode}
+\end{subitemize}
+
+
+\sld{Hierarchical Models}
+%
+\begin{itemize}
+\item Hierarchical models principled way to \myemph{determine how much
+    pooling}.
+\begin{subitemize}
+\item Alternative is to stipulate all or nothing in likelihood (cf. ``subjective'').
+\end{subitemize}
+\item \myemph{Pull estimates} toward the \myemph{population mean} based on amount of
+\myemph{variation} in population
+\begin{subitemize}
+\item \myemph{low variance} population: more pooling
+\item \myemph{high variance} population: less pooling
+\end{subitemize}
+\item \myemph{In limit}
+\begin{subitemize}
+\item as variance goes to 0, get complete pooling
+\item as variance goes to $\infty$, get no pooling
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Hierarchical Batting Ability}
+%
+\begin{itemize}
+\item Instead of fixed priors, \myemph{estimate priors} along with other parameters
+\item Still only \myemph{uses data once} for a single model fit (i.e., not empirical Bayes)
+\item \myemph{Data}: $y_n, K_n$: hits, at-bats for player $n$
+\item \myemph{Parameters}: $\phi_n$: ability for player $n$
+\item \myemph{Hyperparameters}: $\alpha, \beta$: population mean and variance
+\item \myemph{Hyperpriors}: fixed (constant) priors on $\alpha$ and $\beta$
+\end{itemize}
+
+
+\sld{Hierarchical Batting Model {\small (cont.)}}
+%
+\begin{eqnarray*}
+\theta &  \sim & \distro{Uniform}(0,1)
+\\[4pt]
+\kappa & \sim & \distro{Pareto}(1.5)
+\\[4pt]
+\phi_n & \sim & \distro{Beta}(\kappa \, \theta, \ \kappa \, (1 - \theta))
+\\[4pt]
+y_n & \sim & \distro{Binomial}(K_n, \phi_n)
+\end{eqnarray*}
+\begin{itemize}
+\item $\theta$ is prior mean; \ $\kappa$ is prior count (plus 2). 
+\item \myemph{Pareto} provides \myemph{power law} distribution on prior count:
+{\small
+\[
+\distro{Pareto}(u \, | \, \alpha)
+\ \propto \
+\frac{\alpha}
+     {u^{\alpha + 1}}
+\]
+}
+\item Could (\emph{should}!) use more informative prior on hyperparameter $\theta$.
+\end{itemize}
+
+
+\sld{Partial Pooling Model in Stan}
+%
+\begin{stancode}
+data {
+  int<lower=0> N;
+  array[N] int<lower=0> K;
+  array[N] int<lower=0> y;
+}
+parameters {
+  real<lower=0, upper=1> theta;
+  real<lower=1> kappa;
+  vector<lower=0, upper=1>[N] phi;
+}
+model {
+  kappa ~ pareto(1, 1.5);             // hyperprior
+  theta ~ beta(kappa * theta,         // prior
+               kappa * (1 - theta));
+  y ~ binomial(K, theta);             // likelihood
+}
+\end{stancode}
+
+
+\sld{Posterior for Hyperpriors}
+%
+\\[8pt]
+\begin{minipage}[t]{0.55\textwidth}
+\begin{itemize}
+\item \myemph{Scatterplot of draws}
+\item Crosshairs at \myemph{mean}
+\item $\kappa = \alpha +
+  \beta$ \ and \ $\theta = \frac{\alpha}{\alpha + \beta}$
+\item \myemph{Prior mean} estimate: $\hat{\theta} = 0.271$
+\item \myemph{Prior count} estimate: $\hat{\kappa} = 400$
+\item Together yield \myemph{prior standard deviation} of only 0.022\myemph{!!!}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[t]{0.45\textwidth}
+\vfill
+\mbox{ } \ \ \ \ \ \ \includegraphics[height=1.4in]{img/baseball-beta-posterior-scatter.png}
+\vfill
+\end{minipage}
+
+
+\sld{Posterior Ability {\normalsize (High Avg Players)}}
+%
+\vspace*{-8pt}
+\begin{center}
+\includegraphics[height=2.25in]{img/batting-ability-posteriors.png}
+\end{center}
+
+
+\sld{Who's the Best?}
+%
+\vspace*{-2pt}\small
+\begin{itemize}
+\item \myemph{Posterior probability} that player $n$ has \myemph{highest ability} is
+\[
+\mbox{Pr}[\phi_n \geq \max(\phi) \, | \, y]
+\]
+\item Code event with \myemph{indicator variable} in Stan
+\begin{stancode}
+generated quantities {
+  int<lower=0, upper=1> is_best[N];
+  real max_phi = max(phi);  // compute this just once
+  for (n in 1:N)
+    is_best[n] = phi[n] >= max_phi;
+}
+\end{stancode}
+\end{itemize}
+
+
+\sld{Multiple Comparisons}
+%
+\begin{itemize}
+\item Hierarchical model \myemph{adjusts for multiple comparisons} by pulling
+  all estimates toward population mean
+\item \small cf. Gelman, A., Hill, J. and Yajima, M., 2012. Why we (usually) don't have to worry about multiple comparisons. {\slshape Journal of Research on Educational Effectiveness}, 5(2):189--211.
+\end{itemize}
+
+
+\sld{Results for 2006 AL Season}
+%
+\begin{center}
+{\small
+\begin{tabular}{rrrr}
+\emph{Player} & \emph{Average} & \emph{At-Bats} & $\Prob{\text{best}}$
+\\ \hline
+Mauer & .347 & 521 & 0.12
+\\
+Jeter & .343 & 623 & 0.11
+\\
+& .342 & 482 & 0.08
+\\
+& .330 & 648 & 0.04
+\\
+& .330 & 607 & 0.04
+\\
+& .367 & 60 & 0.02
+\\
+& .322 & 695 & 0.02
+\end{tabular}
+}
+\end{center}
+\begin{itemize}
+\item Posterior probabilities reflect uncertainty in data
+\item In the \myemph{last game of the season} (out of 162), \myemph{Joe Mauer} (Minnesota Twins) edged out \myemph{Derek Jeter} (NY Yankees).
+\vfill
+\item It's \myemph{a lot of luck}; sorry for \myemph{ruining your enjoyment} of sports statistics.
+\end{itemize}
+
+
+\sld{Efron \& Morris (1975) Data}
+%
+\begin{itemize}
+\item From their classic analysis for shrinkage/empirical Bayes
+\item Picked batters with 45 at bats on a given day (artificial!)
+\end{itemize}
+\begin{stancode}
+   FirstName   LastName Hits At.Bats Rest.At.Bats Rest.Hits
+1    Roberto   Clemente   18      45          367       127
+2      Frank   Robinson   17      45          426       127
+3      Frank     Howard   16      45          521       144
+4        Jay  Johnstone   15      45          275        61
+5        Ken      Berry   14      45          418       114
+6        Jim    Spencer   14      45          466       126
+7        Don  Kessinger   13      45          586       155
+8       Luis   Alvarado   12      45          138        29
+9        Ron      Santo   11      45          510       137
+10       Ron    Swaboda   11      45          200        46
+11      Rico Petrocelli   10      45          538       142
+\end{stancode}
+
+
+\sld{Pooling vs. No-Pooling Estimates}
+%
+\vspace*{-0.15in}
+\begin{center}
+\includegraphics[height=2.25in]{img/pool-no-pool.png}
+\end{center}
+\vspace*{-0.35in}
+\begin{subitemize}
+\item complete pooling, no pooling, partial pooling, (log odds)
+\end{subitemize}
+
+\sld{Ranking}
+\begin{stancode}
+generated quantities {
+  int<lower=1, upper=N> rnk[N];      // rank of player n
+  {
+    int dsc[N];
+    dsc = sort_indices_desc(theta);
+    for (n in 1:N)
+      rnk[dsc[n]] = n;
+  }
+\end{stancode}
+
+
+\sld{Posterior Ranks}
+%
+\begin{center}
+\includegraphics[height=2.0in]{img/rankings-pool.png}
+\end{center}
+
+\sld{Who is Best? {\normalsize better Stan code}}
+\begin{stancode}
+generated quantities {
+  ...
+  int<lower=0, upper=1> is_best[N];
+  ...
+  for (n in 1:N)
+    is_best[n] = (rnk[n] == 1);  // more efficient
+  ...
+\end{stancode}
+
+\sld{Who is Best? Posterior}
+\begin{center}
+\includegraphics[height=2.0in]{img/who-is-best.png}
+\end{center}
+
+
+\sld{Posterior Predictive Inference}
+%
+\begin{itemize}
+\item How do we predict new outcomes (e.g., rest of season)?
+\begin{stancode}
+data {
+  int<lower=0> K_new[N];       // new trials
+  int<lower=0> y_new[N];       // new outcomes
+  ...
+generated quantities {
+  int<lower=0> z[N];  // posterior prediction
+  for (n in 1:N)
+    z[n] = binomial_rng(K_new[n], theta[n]);
+\end{stancode}
+\item Full Bayes accounts for two sources of uncertainty
+\begin{subitemize}
+\item estimation uncertainty (built into posterior)
+\item sampling uncertainty (explicit RNG function)
+\end{subitemize}
+\end{itemize}
+
+\sld{Posterior Predictions}
+\begin{center}
+\includegraphics[height=2in]{img/posterior-predictions.png}
+\end{center}
+
+
+\sld{Posterior Predictive Check}
+%
+\begin{itemize}
+\item Replicate data from paraemters
+\end{itemize}
+\begin{stancode}
+generated quantities {
+  ...
+  for (n in 1:N)
+    y_rep[n] = binomial_rng(K[n], theta[n]);
+  for (n in 1:N)
+    y_pop_rep[n] = binomial_rng(K[n],
+                               beta_rng(phi * kappa,
+                                        (1 - phi) * kappa));
+  min_y_rep = min(y_rep);
+  sd_y_rep = sd(to_vector(y_rep));
+  p_min = (min_y_rep >= min_y);
+  p_sd = (sd_y_rep >= sd_y);
+}
+\end{stancode}
+
+\sld{Posterior $p$-Values}
+\begin{center}
+\includegraphics[height=2in]{img/posterior-p-values.png}
+\end{center}
+
+
+\sld{Calibration and Sharpness}
+%
+\begin{itemize}
+\item \myemph{Calibration}:  A model is calibrated if the 50\% intervals
+  contain roughly 50\% of the true intervals
+\begin{subitemize}
+\item technically, we expect $\mbox{Binomial}(N, 0.5)$ of $N$
+  parameters to fall in their 50\% intervals
+\item we can evaluate with held-out data using cross-validation
+\end{subitemize}
+%
+\item \myemph{Sharpness}: One posterior is sharper than another if it
+  concentrates more posterior mass around the true value
+\begin{subitemize}
+\item e.g., central posterior intervals of interest are narrower
+\vfill
+\item \footnotesize{see: Gneiting, Balabdaoui, and Raftery (2007) Probabilistic
+    forecasts, calibration and sharpness. {\slshape JRSS B}.}
+\end{subitemize}
+\end{itemize}
+
+
+\sld{More in the Case Study}
+%
+\begin{itemize}
+%
+\item This talk roughly followed my Stan case study:
+\begin{subitemize}
+\item Hierarchical Partial Pooling for Repeated Binary Trials
+\end{subitemize}
+%
+\item Available under case studies at
+\begin{subitemize}
+\item \url{http://mc-stan.org/documentation}.
+\end{subitemize}
+%
+\end{itemize}
+
 
 \end{document}
