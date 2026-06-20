@@ -1005,29 +1005,37 @@ f(\theta)
 \end{itemize}
 
 
-\sld{Monte Carlo Calculation of $\pi$}
+\sld{Monte Carlo estimation of $\pi$}
 
 \noindent
-\begin{minipage}[t]{0.7\textwidth}
+\begin{minipage}[t]{0.65\textwidth}
 \begin{itemize}
-\item Computing $\pi = 3.14\ldots$ via simulation is \emph{the} textbook application
+\item Estimating $\pi = 3.14\ldots$ via simulation is \emph{the} textbook application
 of Monte Carlo methods.
 \vfill
-\item Generate points \myemph{uniformly at random} within the square.
-\item Calculate \myemph{proportion within circle} and multiply by square's area to produce the area of the circle.
-\item This \myemph{circle's area} is $\pi$ (radius $r = 1$ yields area $\pi \cdot r^2 = \pi$).
-\item If $X, Y \sim \mathsf{Uniform}((-1, 1))$, then \\[4pt]
-  $\mathrm{Pr}[X^2 + Y^2 \leq 1] \ = \ \mathbb{E}\!\left[\textrm{I}[X^2 + Y^2 \leq 1]\right] = \pi / 4$. 
+\item Generate points \myemph{uniformly} within the square.
+\item \myemph{Area of circle} is: \\
+  \emph{proportion within circle} times \emph{square's area}.
+\item \myemph{Circle's area} is $\pi;$ \myemph{square's area} is 4.
+  \begin{subitemize}
+    \item radius $r = 1$ yields area $\pi \cdot r^2 = \pi$
+  \end{subitemize}
+\item \myemph{If} $X, Y \sim \mathsf{Uniform}((-1, 1))$, \myemph{then}
+  \vspace*{-4pt}
+  \begin{align*}
+    4 \cdot \mathrm{Pr}[X^2 + Y^2 \leq 1]
+    &= \mathbb{E}\!\left[4 \cdot \textrm{I}[X^2 + Y^2 \leq 1]\right]
+    \\
+    &= \pi.
+    \end{align*}
 \end{itemize}
 \end{minipage}
 %
 \hfill
 %
-\begin{minipage}[t]{0.25\textwidth}
+\begin{minipage}[t]{0.35\textwidth}
 \vspace*{12pt}
-\hfill \includegraphics[height=\textwidth]{img/mc-integration-wikipedia.png}
-\\[4pt]
-{\tiny plot by Mysid Yoderj (Wikipedia)}
+\hfill \includegraphics[height=\textwidth]{img/monte-carlo-pi.png}
 \end{minipage}
 \vfill
 
@@ -1255,7 +1263,227 @@ $\mathrm{Pr}\left[
 
 
 
-\mypart{Models}
+\mypart{Generalized linear models}
 
+\sld{Linear regression}
+%
+\begin{stancode}
+data {
+  int<lower=0> N;                       // # observations
+  vector[N] x;                          // covariates
+  vector[N] y;                          // outcomes
+}
+parameters {
+  real alpha;                           // intercept
+  real beta;                            // slope
+  real<lower=0> sigma;                  // error scale
+}
+model {
+  {alpha, beta} ~ normal(0, 5);         // prior
+  sigma ~ lognormal(0, 1);              // prior
+  y ~ normal(alpha + beta * x, sigma);  // likelihod
+}  
+\end{stancode}
+
+
+\sld{Distribution statements}
+%
+\begin{itemize}
+\item Distribution statements are vectorized, so these two are the same:
+\begin{stancode}
+  y ~ normal(alpha + beta * x, sigma);   
+
+  for (n in 1:N)
+    y[n] ~ normal(alpha + beta * x[n], sigma);
+\end{stancode}
+%
+\item These two target increment statements are also the same as above:
+\begin{stancode}  
+  target += normal_lupdf(y | alpha + beta * x, sigma);
+
+  for (n in 1:N)
+    target += normal_lupdf(y[n] | alpha + beta * x[n], sigma);
+\end{stancode}
+\end{itemize}
+
+\sld{Posterior predictive inference}
+%
+\begin{itemize}
+\item Given ``training'' data $(x, y)$ and fresh covariates $x^\textrm{new}$, \myemph{sample}
+    from the \myemph{posterior predictive distribution}, 
+  $y^{\textrm{new}(m)} \sim p_{Y^\textrm{new} \mid x^\textrm{new}, x, y}$.
+\item Include new covariates as \myemph{additional data variables}.
+\begin{stancode}  
+data {
+  ...
+  int<lower=0> N_new;     // # predictions
+  vector[N_new] x_new;    // covariates for predictions
+}
+\end{stancode}
+\item Use a random number generator in \myemph{generated quantities block}.
+\begin{stancode}
+generated quantities {
+  vector[N_new] y_new = to_vector(normal_rng(alpha + beta * x_new, sigma));
+}  
+\end{stancode}
+\end{itemize}
+
+\sld{Poisson regression}
+\begin{itemize}
+\item Swap out data declaration and likelihood for Poisson.
+\begin{stancode}
+data {
+  int<lower=0> N;                       // # obs
+  vector[N] x;                          // covariates
+  array[N] int<lower=0> y;              // count outcomes
+}
+parameters {
+  real alpha;                           // intercept
+  real beta;                            // slope
+}
+model {
+  { alpha, beta } ~ normal(0, 5);       // priors
+  y ~ poisson_log(alpha + beta * x);    // likelihod
+  // note: poisson_log(mu) = poisson(exp(mu))
+}  
+\end{stancode}
+\end{itemize}
+
+\sld{Log odds}
+\begin{itemize}
+\item \myemph{Logistic regression} is a linear regression on the log odds of a binary outcome.
+\item A probability $p \in (0,1) $ has \myemph{odds}  $p:(1 - p)$ and \myemph{odds ratio} $\dfrac{p}{1 - p}$.
+\item The \myemph{log odds}, conventionally denoted \emph{logit}, and its inverse,
+  $$
+  \textrm{logit}(p) = \log \dfrac{p}{1 - p}
+  \qquad \qquad
+  \textrm{logit}^{-1}(v) = \dfrac{\exp(v)}{1 + \exp(v)}.
+  $$
+\begin{center}
+  \begin{tabular}{c|clr|l}
+    $p$ & odds & odds ratio & log odds & note \\ \hline
+    1/4 & 1:3 & (1/4) / (3/4) = 1/3 & $- \log 3$ & log odds negative if $p < 0$ \\
+    1/2 & 1:1 & (1/2) / (1/2) = 1 & $0$  & \small log odds 0 if $p = 1/2$ \\
+    3/4 & 3:1 & (3/4) / (1/4) = 3 & $\log 3$ & \small $\textrm{logit}(p) = -\textrm{logit}(1-p)$ symmetric
+  \end{tabular}
+\end{center}
+\end{itemize}
+
+\sld{Logistic regression}
+\begin{itemize}
+\item You guessed it---swap for logistic
+\end{itemize}
+\begin{stancode}
+data {
+  int<lower=0> N;                       // # obs
+  vector[N] x;                          // covariates
+  array[N] int<lower=0, upper=1> y;     // binary outcomes
+}
+parameters {
+  real alpha;                           // intercept
+  real beta;                            // slope
+}
+model {
+  {alpha, beta} ~ normal(0, 5);           // prior
+  y ~ bernoulli_logit(alpha + beta * x);  // log odds: alpha + beta * x
+}  
+\end{stancode}
+
+\sld{Multiple regression}
+\begin{itemize}
+\item Data $N \times K$ matrix (w. column of intercepts); slopes $K$-vector.
+\end{itemize}
+\begin{stancode}
+data {
+  int<lower=0> N;                       
+  int<lower=1> K;              // # covariates per outcome
+  matrix[N, K] x;              // data matrix
+  array[N] int<lower=0> y;              
+}
+parameters {
+  vector[K] beta;              // K slopes
+}
+model {
+  beta ~ normal(0, 5);         // vectorized prior, following likelihood
+  y ~ poisson_log(x * beta);   // vec-mat multiply (x * beta) is N-vector
+}  
+\end{stancode}
+
+
+\mypart{Crowdsourcing}
+
+\sld{Bradley-Terry crowdsourcing model}
+\begin{itemize}
+\item Bradley and Terry (early 1950s) collected data on \myemph{consumers comparing
+    pairs of products}  to estimate their quality. 
+\item Products $j$ are parameterized with a \myemph{real valued quality}
+  $\alpha_j \in (-\infty, \infty)$.
+\item The $n$-th rating compares \myemph{products} $i_n$ and $j_n$, with \myemph{rating} $y_n = 1$ if product $i_n$ \myemph{preferred} to $j_n$
+\item Log odds of $i_n$ being better than $j_n$ is $\alpha_{i[n]} - \alpha_{j[n]}$,
+  $$
+  y_n \sim \textrm{bernoulli\_logit}(\alpha_{i[n]} - \alpha_{j[n]}).
+  $$
+\item Elo (1960s) rediscovered a rescaled variant and proposed on online update
+  \begin{subitemize}
+  \item update is via stochastic gradient descent (Robbins and Monro early 1950s).
+  \end{subitemize}
+\end{itemize}
+
+\sld{Bradley-Terry code}
+\begin{stancode}
+data {
+  int<lower=0> N;                       // # matchups
+  int<lower-0> J;                       // # items
+  array[N] int<lower=1, upper=J> ii;    // first item
+  array[N] int<lower=1, upper=J> jj;    // second item
+  array[N] int<lower=0, upper=1> y;     // outcomes
+}
+parameters {
+  vector[J] alpha;                      // abilities (log odds scale)
+}
+model {
+  alpha ~ normal(0, 5);                        // prior
+  y ~ bernoulli_logit(alpha[ii] - alpha[jj]);  // vectorized likelihood
+
+  // equiv for (n in 1:N) y[n] ~ bernoulli_logit(alpha[ii[n]] - alpha[jj[n]]);
+}  
+\end{stancode}
+
+
+\sld{Item-response theory (1PL)}
+\begin{itemize}
+\item Used for \myemph{educational test design}.
+\item Response $y_n$ is 1 if student $j_n$ \myemph{correctly answered} test question $i_n$.
+\item Like Bradley-Terry, w.\ student \myemph{abilities} $\alpha_j$ and question \myemph{difficulties} $\beta_i$,
+  $$
+  y_n \sim \textrm{bernoulli}(\textrm{logit}^{-1}(\alpha_{j[n]} - \beta_{i[n]})).
+  $$
+\item In Stan,
+  \begin{stancode}
+    vector[J] alpha;  vector[I] beta; 
+    ... 
+    y ~ bernoulli_logit(alpha[jj] - beta[ii]); 
+  \end{stancode}
+\item The \myemph{one-parameter logistic} (1PL) involves difficulty parameter with ability being a ``nuisance'' required to match data.
+\end{itemize}
+
+\sld{Item-response theory (2PL)}
+\begin{itemize}
+\item Want to know how \myemph{discriminative} test items are
+  \begin{subitemize}
+  \item an item is discriminative if abilities greater than difficulty have high chance of
+    getting it correct and abilities lower than difficulty have low chance
+  \end{subitemize}
+\item Add discrimination $\delta_i > 0$ for items, and use
+  $$
+  y_n \sim \textrm{bernoulli}(\textrm{logit}^{-1}(\delta_{i[n]} \cdot ((\alpha_{j[n]} - \beta_{i[n]})).
+  $$
+\item As $\delta_i \rightarrow \infty$, if $\beta_j < \alpha_i$, then log odds go to $-\infty$ and if $\beta_j > \alpha_i$, log odds go to $\infty$.
+\end{itemize}
+\begin{stancode}
+vector[I] delta;
+... 
+y ~ bernoulli_logit(delta .* (alpha[jj] - beta[ii]));  // .* elementwise
+\end{stancode}
 
 \end{document}
