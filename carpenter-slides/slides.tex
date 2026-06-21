@@ -1998,4 +1998,930 @@ generated quantities {
 \end{itemize}
 
 
+\mypart{The Stan Language}{}
+
+
+\sld{Stan is a programming language}
+%
+\begin{itemize}
+\item \myemph{Not} a graphical specification language like BUGS or JAGS
+\item Stan is a Turing-complete imperative programming language \myemph{for specifying differentiable log densities} and \myemph{posterior predictive inferences}.
+\begin{subitemize}
+\item reassignable local variables and scoping
+\item full conditionals and loops
+\item functions (including recursion)
+\end{subitemize}
+\item With automatic ``black-box'' inference on top (though even that is tunable)
+\item Programs computing same thing may have different efficiency
+\end{itemize}
+
+
+\sld{Basic program blocks}
+%
+\begin{itemize}
+\item \myemph{\tt\bfseries data} \ (once)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare data types, sizes, and constraints
+  \item {\slshape execute}: read from data source, validate constraints
+  \end{itemize}
+  %
+\item \myemph{\tt\bfseries parameters} \ (every log prob eval)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare parameter types, sizes, and constraints
+  \item {\slshape execute}: transform to constrained, Jacobian
+  \end{itemize}
+  %
+\item \myemph{\tt\bfseries model} \ (every log prob eval)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: statements defining posterior density
+  \item {\slshape execute}: execute statements
+  \end{itemize}
+\end{itemize}
+
+
+\sld{Derived variable blocks}
+%
+\begin{itemize}
+\item \myemph{\tt\bfseries transformed data} (once after data)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare and define transformed data variables
+  \item {\slshape execute}: execute definition statements, validate constraints
+  \end{itemize}
+  %
+\item \myemph{\tt\bfseries transformed parameters} (every log prob eval)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare and define transformed parameter vars
+  \item {\slshape execute}: execute definition statements, validate constraints
+  \end{itemize}
+  %
+\item \myemph{\tt\bfseries generated quantities} (once per draw,
+  \code{double} type)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare and define generated quantity
+    variables; \\
+    includes pseudo-random number generators
+    \\
+    {\footnotesize (for posterior predictions, event probabilities,
+      decision making)}
+  \item {\slshape execute}: execute definition statements, validate constraints
+  \end{itemize}
+  %
+\end{itemize}
+
+
+\sld{Reading and transforming data}
+%
+\begin{itemize}
+\item Only done once for optimization or sampling (per chain)
+\item Read data
+\begin{subitemize}
+\item read data variables from memory or file stream
+\item validate data
+\end{subitemize}
+\item Generate transformed data
+\begin{subitemize}
+\item execute transformed data statements
+\item validate variable constraints when done
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Evaluating the log density}
+%
+\begin{itemize}
+\item \emph{Given} parameter values on unconstrained scale
+\item Builds expression graph for log density (start at 0)
+\item Inverse transform parameters to constrained scale
+\begin{subitemize}
+\item constraints involve non-linear transforms
+\item e.g.,  positive constrained $x$ to unconstrained $y = \log x$
+\end{subitemize}
+\item account for curvature in change of variables
+\begin{subitemize}
+\item e.g., unconstrained $y$ to positive $x = \log^{-1}(y) =
+  \exp(y)$
+\item e.g., add log Jacobian determinant, $\log |\frac{d}{dy} \exp(y)| = y$
+\end{subitemize}
+\item Execute model block statements to increment log density
+\end{itemize}
+
+\sld{Evaluating gradients}
+%
+\begin{itemize}
+\item Log density evaluation builds up expression graph
+\begin{subitemize}
+\item templated overloads of functions and operators
+\item efficient arena-based memory management
+\end{subitemize}
+\item Compute gradient in backward pass on expression graph
+\begin{subitemize}
+\item propagate partial derivatives via chain rule
+\item work backwards from final log density to parameters
+\item dynamic programming for shared subexpressions
+\end{subitemize}
+\item Linear multiple of time to evaluate log density
+\end{itemize}
+
+
+\sld{Evaluating generated quantities}
+%
+\begin{itemize}
+\item \myemph{Given} parameter values
+\item Once per iteration (not once per leapfrog step)
+\item May involve (pseudo) random-number generation
+\begin{subitemize}
+\item Executed generated quantity statements
+\item Validate values satisfy constraints
+\end{subitemize}
+\item Typically used for
+\begin{subitemize}
+\item Event probability estimation
+\item Predictive posterior estimation
+\end{subitemize}
+\item Efficient because evaluated with \code{double} types (no autodiff)
+\end{itemize}
+
+
+\sld{Variable transforms}
+%
+\begin{itemize}
+\item Code HMC and optimization with $\mathbb{R}^n$ \myemph{support}
+\item Transform constrained parameters to unconstrained
+  \vspace*{-2pt}
+  {\small
+    \begin{itemize}
+    \item lower (upper) bound: offset (negated) log transform
+    \item lower and upper bound: scaled, offset logit transform
+    \item simplex: centered, stick-breaking logit transform
+    \item ordered: free first element, log transform offsets
+    \item unit length: spherical coordinates
+    \item covariance matrix: Cholesky factor positive diagonal
+    \item correlation matrix: rows unit length via quadratic stick-breaking
+    \end{itemize}
+  }
+\end{itemize}
+
+
+\sld{Variable transforms (cont.)}
+%
+\begin{itemize}
+\item Inverse transform from unconstrained $\mathbb{R}^n$
+\item Evaluate log probability in model block on natural scale
+\item Optionally adjust log probability for change of variables
+\begin{subitemize}
+\item adjustment for MCMC and variational, not MLE
+\item add log determinant of inverse transform Jacobian
+\item automatically differentiable
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Variable and expression types}
+%
+\\
+\spc Variables and expressions are \myemph{strongly, statically typed}.
+\begin{subitemize}
+\item \myemph{Primitive}: {\tt\small int}, \ {\tt\small real}
+\item \myemph{Matrix}: {\tt\small matrix[M,N]}, \ {\tt\small vector[M]}, \ {\tt\small row\_vector[N]}
+\item \myemph{Bounded}: primitive or matrix, with
+  \\ {\tt\small <lower=L>}, \ {\tt\small <upper=U>}, \ {\tt\small <lower=L,upper=U>}
+\item \myemph{Constrained Vectors}: {\tt\small simplex[K]}, \ {\tt\small
+    ordered[N]}, {\tt\small pos\_ordered[N]}, {\tt\small sum\_to\_zero[K]}
+  \\ {\tt\small positive\_ordered[N]}, \ {\tt\small unit\_length[N]}
+\item \myemph{Constrained Matrices}: {\tt\small cov\_matrix[K]}, \ {\tt\small
+    corr\_matrix[K]}, \ {\tt\small cholesky\_factor\_cov[M,N]}, \
+  {\tt\small cholesky\_factor\_corr[K]}, \ {\tt\small row\_stochastic\_matrix[M, N]},
+  \ {\tt\small column\_stochastic\_matrix[M, N]}, 
+\item \myemph{Arrays:}  of any type (and dimensionality) \ {\tt\small array[N] T}
+\end{subitemize}
+
+
+\sld{Integers and reals}
+%
+\begin{itemize}
+\item Different types (conflated in BUGS, JAGS, and R)
+\item Distributions and assignments care
+\item Integers may be assigned to reals but not vice-versa
+\item Reals have not-a-number, and positive and negative infinity
+\item Integers single-precision up to +/- 2 billion
+\item Integer division rounds (Stan provides warning)
+\item Real arithmetic is inexact and reals should not be (usually) compared with \code{==}
+\end{itemize}
+
+
+\sld{Arrays, vectors, and matrices}
+%
+\begin{itemize}
+\item Stan separates arrays, matrices, vectors, row vectors
+\item Which to use?
+\item Arrays allow most efficient access (no copying)
+\item Arrays stored first-index major (i.e., 2D are row major)
+\item Vectors and matrices required for matrix and linear algebra functions
+\item Matrices stored column-major (memory locality matters)
+\item Are not assignable to each other, but there are conversion functions
+\end{itemize}
+
+
+\sld{Logical operators}
+%
+\vfill
+\noindent\spc
+{\footnotesize
+  \begin{tabular}{c|ccl|l}
+    {\it Op.} & {\it Prec.} & {\it Assoc.} & {\it
+      Placement} & {\it Description}
+    \\ \hline \hline
+    \code{||} & 9 & left & binary infix & logical or
+    \\ \hline
+    \Verb|&&| & 8 & left & binary infix & logical and
+    \\ \hline
+    \Verb|==| & 7 & left & binary infix & equality
+    \\
+    \Verb|!=| & 7 & left & binary infix & inequality
+    \\ \hline
+    \Verb|<| & 6 & left & binary infix & less than
+    \\
+    \Verb|<=| & 6 & left & binary infix & less than or equal
+    \\
+    \Verb|>| & 6 & left & binary infix & greater than
+    \\
+    \Verb|>=| & 6 & left & binary infix & greater than or equal
+  \end{tabular}
+}
+\vfill
+\vfill
+
+
+\sld{Arithmetic and matrix operators}
+%
+\vfill
+\noindent\spc
+{\footnotesize
+  \begin{tabular}{c|ccl|l}
+    {\it Op.} & {\it Prec.} & {\it Assoc.} & {\it
+      Placement} & {\it Description}
+    \\ \hline \hline
+
+    \code{+} & 5 & left & binary infix & addition
+    \\
+    \code{-} & 5 & left & binary infix & subtraction
+    \\ \hline
+    \code{*} & 4 & left & binary infix & multiplication
+    \\
+    \code{/} & 4 & left & binary infix & (right) division
+    \\ \hline
+    \Verb|\| & 3 & left & binary infix & left division
+    \\ \hline
+    \code{.*} & 2 & left & binary infix & elementwise multiplication
+    \\
+    \code{./} & 2 & left & binary infix & elementwise division
+    \\ \hline
+    \code{!} & 1 & n/a & unary prefix & logical negation
+    \\
+    \code{-} & 1 & n/a & unary prefix & negation
+    \\
+    \code{+} & 1 & n/a & unary prefix & promotion (no-op in Stan)
+    \\ \hline
+    \Verb|^| & 2 & right & binary infix & exponentiation
+    \\ \hline
+    \code{'} & 0 & n/a & unary postfix & transposition
+    \\ \hline \hline
+    \code{()} & 0 & n/a & prefix, wrap & function application
+    \\
+    \code{[]} & 0 & left & prefix, wrap & array, matrix indexing
+  \end{tabular}
+}
+
+
+\sld{Assignment operators}
+%
+\vfill
+\noindent\spc
+{\footnotesize
+  \begin{tabular}{c|ccl|l}
+    {\it Op.} & {\it Description} \\ \hline \hline
+    \code{=} & assignment \\
+    \code{+=} & compound add and assign \\
+    \code{-=} & compound subtract and assign \\
+    \code{*=} & compound multiply and assign \\
+    \code{/=} & compound divide and assign \\
+    \code{.*=} & compound elementwise multiply and assign \\
+    \code{./=} & compound elementwise divide and assign \\
+
+  \end{tabular}
+}
+%
+\begin{itemize}
+\item these work with all relevant matrix types
+\begin{subitemize}
+\item e.g., \Verb|matrix *= matrix;|
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Built-in functions}
+%
+\begin{itemize}
+\item All built-in \myemph{C++ functions and operators}
+  \\
+  {\footnotesize C math, TR1, C++11, including all trig, pow, and
+    special log1m, erf, erfc, fma, atan2, etc.}
+\item Extensive library of \myemph{statistical functions}
+  \\
+  {\footnotesize e.g., softmax,
+    log gamma and digamma functions, beta functions, Bessel functions of
+    first and second kind, etc.}
+  %
+\item Efficient, arithmetically stable \myemph{compound functions}
+  \\
+  {\footnotesize e.g., multiply log, log sum of
+    exponentials, log inverse logit}
+\end{itemize}
+
+
+\sld{Built-in matrix functions}
+%
+\begin{itemize}\small
+\item \myemph{Basic arithmetic}: all arithmetic operators
+\item \myemph{Elementwise arithmetic}: vectorized operations
+\item \myemph{Solvers}: matrix division, (log) determinant,
+  inverse
+\item \myemph{Decompositions}: QR, Eigenvalues and Eigenvectors,
+  \\
+  Cholesky factorization, singular value decomposition
+\item \myemph{Compound Operations}: quadratic forms, variance scaling, etc.
+\item \myemph{Ordering, Slicing, Broadcasting}: sort, rank, block, rep
+\item \myemph{Reductions}: sum, product, norms
+\item \myemph{Specializations}: triangular, positive-definite,
+\end{itemize}
+
+
+\sld{Atomic statements}
+%
+\begin{itemize}
+\item \myemph{Distribution}: \ {\footnotesize \Verb|y ~ normal(mu,sigma)|}
+  \ \ \ {\footnotesize (\myemph{increments log probability})}
+\item \myemph{Increment log density}: \ {\footnotesize target += lp;}
+\item \myemph{Assignment}: \  {\footnotesize \code{y\_hat = x * beta};}
+\end{itemize}
+
+
+\sld{Block statements}
+%
+\begin{itemize}
+\item \myemph{Block}: \ {\footnotesize \Verb|{ ...; ...; ...; }|}
+  \hfill {\footnotesize
+    (allows initial local variables)}
+\end{itemize}
+
+\sld{Control statements}
+%
+\begin{itemize}
+\item \myemph{For loop}: \ {\footnotesize \code{for (n in 1:N) ...}}
+\item \myemph{While loop}: \ {\footnotesize \code{while (cond) ...}}
+\item \myemph{Conditional}: \ {\footnotesize
+    \code{if (cond) ...; else if (cond) ...;  else ...;}}
+\item \myemph{Break}: \ {\footnotesize \code{break}}
+\item \myemph{Continue}: \ {\footnotesize \code{continue}}
+\end{itemize}
+
+\sld{Statements with side effects}
+%
+\begin{itemize}
+\item \myemph{Print}: \ {\footnotesize \code{print("theta=", theta);}}
+\item \myemph{Reject}:
+\ {\footnotesize
+    \code{reject("arg to foo must be positive, found y=", y);}}
+\end{itemize}
+
+
+\sld{Distribution statement increments target}
+%
+\begin{itemize}
+\item A Stan program defines a log posterior
+\begin{subitemize}
+\item typically through log joint and Bayes's rule
+\end{subitemize}
+\item Sampling statements are just ``syntactic sugar''
+\item A shorthand for incrementing the log posterior
+\item The following define the same$^*$ posterior
+\begin{itemize}
+\item \Verb|y ~ poisson(lambda);|
+\item \texttt{target += poisson\_lupdf(y | lambda);}
+\end{itemize}
+\item ${}^{*}$ up to a constant
+\item Sampling statement drops constant terms
+\end{itemize}
+
+
+
+\sld{Local scope blocks}
+%
+\begin{itemize}
+\item
+\begin{Verbatim}
+  y ~ bernoulli(theta);
+\end{Verbatim}
+is more efficient with sufficient statistics
+{\small
+\begin{Verbatim}
+  {
+    real sum_y;  // local variable
+    sum_y = 0;
+    for (n in 1:N)
+      sum_y = sum_y + y[n];   // reassignment
+    sum_y ~ binomial(N, theta);
+  }
+\end{Verbatim}
+}
+\item Simpler, but roughly same efficiency:
+\begin{Verbatim}
+    sum(y) ~ binomial(N, theta);
+\end{Verbatim}
+\end{itemize}
+
+
+\sld{User-defined functions}
+%
+\begin{itemize}
+\item \myemph{\tt\bfseries functions} \ (compiled with model)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare and define general (recursive) functions
+    \\
+    {\small (use them elsewhere in program)}
+  \item {\slshape execute}: compile with model
+  \end{itemize}
+  \vspace*{6pt}
+\item Example
+  \\[6pt]
+  \begin{minipage}[t]{0.8\textwidth}
+    \footnotesize
+    \begin{Verbatim}
+      functions {
+
+        real relative_difference(real u, real v) {
+          return 2 * fabs(u - v) / (fabs(u) + fabs(v));
+        }
+
+      }
+    \end{Verbatim}
+  \end{minipage}
+\end{itemize}
+
+\sld{Special user-defined functions}
+%
+\begin{itemize}
+\item When declared with appropriate naming, user-defined functions
+  may
+\begin{subitemize}
+\item be used in sampling statements: \code{real} return and suffix \Verb|_lpdf| or \Verb|_lpmf|
+\item use RNGs: suffix \Verb|_rng|
+\item use target accumulator:  suffix \Verb|_lp|
+\end{subitemize}
+\end{itemize}
+
+
+\sld{User-defed pdfs and cdfs}
+%
+\begin{itemize}
+\item May be used with sampling and PDF/PMF notation
+\begin{subitemize}
+\item \myemph{density}: suffix \code{\_lpdf} if variate (first arg) is real
+\item \myemph{mass}: Suffix \code{\_lpmf} if variate (first arg) is integer
+\end{subitemize}
+\end{itemize}
+%
+{\small
+\begin{stancode}
+functions {
+  real centered_normal_lpdf(real y, real sigma) {
+    return -0.5 * (y / sigma)^2;
+  }
+
+model {
+  y ~ centered_normal(2.5);                 // sampling
+
+  target += centered_normal_lpdf(y | 2.5);  // pdf notation
+\end{stancode}
+}
+
+
+\sld{Target increments}
+%
+\begin{itemize}
+\item May access target or use sampling statements
+\item Only usable in model block
+\begin{subitemize}
+\item must end in \code{\_lp}
+\end{subitemize}
+\end{itemize}
+%
+\begin{stancode}
+functions {
+  vector non_center_lp(vector beta_std, real mu, real sigma) {
+    beta_std ~ normal(0, 1);
+    return mu + sigma * beta_raw;
+  }
+parameters {
+  vector[K] beta_std;
+model {
+  vector[K] beta = non_center_lp(beta_std);
+  y ~ normal(x * beta, sigma);
+\end{stancode}
+
+
+\sld{RNG functions}
+%
+\begin{itemize}
+\item Only usable in generated quantities block
+\begin{subitemize}
+\item must end in \code{\_rng}
+\end{subitemize}
+\end{itemize}
+%
+\begin{stancode}
+functions {
+  real centered_normal_rng(real sigma) {
+    return normal_rng(0, sigma);
+  }
+
+generated quantities {
+  real alpha = centered_normal_rng(2.7);
+\end{stancode}
+
+
+
+\mypart{Under Stan's Hood}{}
+
+
+\sld{Euclidean Hamiltonian Monte Carlo}
+%
+\begin{itemize}
+\item \myemph{Phase space}: $q$ position (parameters); \ $p$ momentum
+\item \myemph{Posterior density}: $\pi(q)$
+\item \myemph{Mass matrix}: $M$
+\item \myemph{Potential energy}: $V(q) = -\log \pi(q)$
+\item \myemph{Kinetic energy}: $T(p) = \frac{1}{2} p^{\top} M^{-1} p$
+\item \myemph{Hamiltonian}:  $H(p,q) = V(q) + T(p)$
+\item \myemph{Diff eqs}:
+  \[
+  \frac{dq}{dt} \ = \  + \frac{\partial H}{\partial p}
+  \hspace*{48pt}
+  \frac{dp}{dt} \ = \ - \frac{\partial H}{\partial q}
+  \]
+\end{itemize}
+
+
+\sld{Leapfrog integrator}
+%
+\begin{itemize}
+\item Solves Hamilton's equations by \myemph{simulating dynamics}
+  \\
+  {\footnotesize (symplectic [volume preserving]; $\epsilon^3$ error per step, $\epsilon^2$ total error)}
+\item Given: \myemph{step size} $\epsilon$, \myemph{mass matrix} $M$, \myemph{parameters} $q$
+\item \myemph{Initialize kinetic} energy, $p \sim {\sf
+    Normal}(0,\mbox{\bf I})$
+\item \myemph{Repeat} for $L$ leapfrog steps:
+  \begin{eqnarray*}
+    p & \leftarrow &
+    p - \frac{\epsilon}{2} \, \frac{\partial V(q)}{\partial q}
+    \ \ \ \ \ \ \mbox{[half step in momentum]}
+    \\[6pt]
+    q & \leftarrow &
+    q + \epsilon \, M^{-1} \, p
+    \ \ \ \ \ \ \ \  \mbox{[full step in position]}
+    \\[6pt]
+    p & \leftarrow &
+    p - \frac{\epsilon}{2} \, \frac{\partial V(q)}{\partial q}
+    \ \ \ \ \ \ \mbox{[half step in momentum]}
+  \end{eqnarray*}
+\end{itemize}
+
+
+\sld{Reverse-mode automatic differentiation}
+%
+\begin{itemize}
+\item Eval gradient in (usually small) multiple of function eval time
+\begin{subitemize}
+\item independent of dimensionality
+\item time proportional to number of expressions evaluated
+\end{subitemize}
+%
+\item Result accurate to machine precision (cf. finite diffs)
+\item Function evaluation builds up \myemph{expression tree}
+\item Dynamic program propagates \myemph{chain rule} in reverse pass
+\item Reverse mode computes $\nabla g$ in one
+  pass for a function $f : \mathbb{R}^N \rightarrow \mathbb{R}$
+\end{itemize}
+
+
+\sld{Autodiff Expression Graph}
+%
+\\
+\hspace*{6pt}
+\begin{minipage}{0.50\textwidth}
+\includegraphics[width=\textwidth]{img/agrad-expression-graph.pdf}
+\end{minipage}
+\hspace*{-24pt}
+\begin{minipage}{0.44\textwidth}
+%
+\footnotesize
+\[
+\begin{array}{l}
+f(y, \mu, \sigma)
+\\[4pt]
+\mbox{ } \ = \ \log \left( \distro{Normal}(y|\mu,\sigma) \right)
+\\[4pt]
+\mbox{ } \ = \ -\frac{1}{2} \left( \frac{y - \mu}{\sigma} \right)^2
+    - \log \sigma
+    - \frac{1}{2} \log (2 \pi)
+\end{array}
+\]
+\\
+%
+\[
+\begin{array}{l}
+\mbox{ } \hspace*{24pt}
+\frac{\partial}{\partial y} f(y,\mu,\sigma)
+\\[2pt]
+\mbox{ } \hspace*{48pt} = \  -(y - \mu) \sigma^{-2}
+\\[8pt]
+\mbox{ } \hspace*{24pt} \frac{\partial}{\partial \mu} f(y,\mu,\sigma)
+\\[2pt]
+\mbox{ } \hspace*{48pt} = \ (y - \mu) \sigma^{-2}
+\\[8pt]
+\mbox{ } \hspace*{24pt} \frac{\partial}{\partial \sigma} f(y,\mu,\sigma)
+\\[2pt]
+\mbox{ } \hspace*{48pt} = \ (y - \mu)^2 \sigma^{-3} - \sigma^{-1}
+\end{array}
+\]
+\end{minipage}
+
+
+\sld{Autodiff Partials}
+%
+\begin{center}\footnotesize
+\begin{tabular}{c||c|cc}
+{\it var} & {\it value} & \multicolumn{2}{|c}{\it partials}
+\\ \hline \hline
+$v_1$ & $y$
+\\[2pt]
+$v_2$ & $\mu$
+\\[2pt]
+$v_3$ & $\sigma$
+\\[2pt]
+$v_4$ & $v_1 - v_2$ & $\partial v_4 / \partial v_1 = 1$
+                   & $\partial v_4 / \partial v_2 = -1$
+\\[4pt]
+$v_5$ & $v_4 / v_3$ & $\partial v_5 / \partial v_4 = 1/v_3$
+                    & $\partial v_5 / \partial v_3 = -v_4 v_3^{-2}$
+\\[4pt]
+$v_6$ & $\left(v_5\right)^2$
+      & \multicolumn{2}{c}{$\partial v_6 / \partial v_5 = 2 v_5$}
+\\[4pt]
+$v_7$ & $(-0.5) v_6$ & \multicolumn{2}{c}{$\partial v_7 / \partial v_6
+                                          = -0.5$}
+\\[4pt]
+$v_8$ & $\log v_3$ & \multicolumn{2}{c}{$\partial v_8 / \partial v_3 = 1/v_3$}
+\\[4pt]
+$v_9$ & $v_7 - v_8$ & $\partial v_9 / \partial v_7 = 1$
+                    & $\partial v_9 / \partial v_8 = -1$
+\\[4pt]
+$v_{10}$ & $v_9 - (0.5 \log 2\pi)$
+         & \multicolumn{2}{c}{$\partial v_{10} / \partial v_9 = 1$}
+\end{tabular}
+\end{center}
+
+\sld{Autodiff: Reverse Pass}
+%
+{\small
+\[
+\begin{array}{rcl|l}
+{\it var} & {\it operation} & {\it adjoint} & {\it result}
+\\ \hline \hline
+a_{1:9} & = & 0 & a_{1:9} = 0
+\\
+a_{10} & = & 1 & a_{10} = 1
+\\ \hline
+a_{9} & {+}{=} & a_{10} \times (1) & a_9 = 1
+\\
+a_{7} & {+}{=} & a_9 \times (1) & a_7 = 1
+\\
+a_{8} & {+}{=} & a_9 \times (-1) & a_8 = -1
+\\
+a_{3} & {+}{=} & a_8 \times (1 / v_3) & a_3 = -1 / v_3
+\\
+a_{6} & {+}{=} & a_7 \times (-0.5) & a_6 = -0.5
+\\
+a_{5} & {+}{=} & a_6 \times (2 v_5) & a_5 = -v_5
+\\
+a_{4} & {+}{=} & a_5 \times (1 / v_3) & a_4 = -v_5 / v_3
+\\
+a_{3} & {+}{=} & a_5 \times (-v_4 v_3^{-2}) & a_3 = -1 / v_3 + v_5 v_4 v_3^{-2}
+\\
+a_{1} & {+}{=} & a_4 \times (1) & a_1 = -v_5 / v_3
+\\
+a_{2} & {+}{=} & a_4 \times (-1) & a_2 = v_5 / v_3
+\end{array}
+\]
+}
+
+
+\sld{Stan's reverse-mode autodiff}
+%
+\begin{itemize}
+\item Easily extensible \myemph{object-oriented} design
+%
+\item \myemph{Code nodes} in expression graph for primitive functions
+\begin{subitemize}
+\item requires \myemph{partial derivatives}
+\item built-in flexible abstract base classes
+\item \myemph{lazy evaluation} of chain rule saves memory
+\end{subitemize}
+%
+\item Autodiff through templated C++ functions
+\begin{subitemize}
+\item templating on each argument avoids excess promotion
+\end{subitemize}
+%
+\end{itemize}
+
+
+\sld{Stan's reverse mode (cont.)}
+%
+\begin{itemize}
+\item Arena-based \myemph{memory management}
+\begin{subitemize}
+\item specialized C++ \code{operator~new} for reverse-mode variables
+\item custom functions inherit memory management through base
+\end{subitemize}
+\item Nested application to support ODE solver
+\end{itemize}
+
+
+\sld{Forward-mode automatic differentiation}
+%
+\begin{itemize}
+\item Evaluates expression graph forward from one independent variable
+to any number of dependent variables
+\item Function evaluation propagates \myemph{chain rule} forward
+\item In one pass, computes $\frac{\partial}{\partial x} f(x)$
+for a function $f : \mathbb{R} \rightarrow \mathbb{R}^N$
+\begin{subitemize}
+\item derivative of $N$ outputs with respect to a single input
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Stan's forward mode}
+%
+\begin{itemize}
+\item Templated scalar type for value and tangent
+\begin{subitemize}
+\item allows higher-order derivatives
+\end{subitemize}
+\item Primitive functions propagate derivatives
+\item No need to build expression graph in memory
+\begin{subitemize}
+\item much less memory intensive than reverse mode
+\end{subitemize}
+\item Autodiff through templated functions (as reverse mode)
+\end{itemize}
+
+\sld{Second-order derivatives}
+%
+\begin{itemize}
+\item Compute Hessian (matrix of second-order partials)
+\[
+H_{i,j} = \frac{\partial^2}{\partial x_i \partial x_j} f(x)
+\]
+\item Required for Laplace covariance approximation (MLE)
+\item Required for curvature (Riemannian HMC)
+\item Nest reverse-mode in forward for \myemph{second order}
+\item $N$ forward passes: takes gradient of derivative
+\item All higher-order derivative patterns available through \myemph{Stan Playground}.
+\end{itemize}
+
+
+
+\sld{Third-order derivatives}
+%
+\begin{itemize}
+\item Required for Riemannian HMC
+\item Gradients of Hessians (tensor of third-order partials)
+\[
+\frac{\partial^3}{\partial x_i \partial x_j \partial x_k} f(x)
+\]
+\vspace*{-12pt}
+\begin{subitemize}
+\item $N^2$ forward passes: gradient of derivative of derivative
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Third-order derivatives (even more esoteric)}
+%
+\begin{itemize}
+\item Gradient of trace of Hessian times matrix
+\begin{subitemize}
+\item $\nabla \mathrm{tr}(H \, M)$, or
+\item needed for Riemannian Hamiltonian Monte Carlo
+\item computable in quadratic time for fixed $M$
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Jacobians}
+%
+\begin{itemize}
+\item Assume function $f:\mathbb{R}^N \rightarrow \mathbb{R}^M$
+\item Partials for multivariate function (matrix of first-order partials)
+\[
+J_{i,j} = \frac{\partial}{\partial x_i} f_j(x)
+\]
+\item Required for stiff ordinary differential equations
+\begin{subitemize}
+\item differentiate is coupled sensitivity autodiff for ODE system
+\end{subitemize}
+\item Two execution strategies
+{\small
+\begin{enumerate}
+  \item Multiple reverse passes for rows
+  \item Forward pass per column (required for stiff ODE)
+\end{enumerate}
+}
+%
+%\vfill
+%
+%\item Order of magnitude faster higher-order autodiff in progress
+%\begin{subitemize}
+%\item reuse single expression graph
+%\item build-in higher-order analytic gradients
+%\end{subitemize}
+\end{itemize}
+
+
+\sld{Autodiff functionals}
+%
+\begin{itemize}
+\item Functionals map templated functors to derivatives
+\begin{subitemize}
+\item fully encapsulates and hides all autodiff types
+\end{subitemize}
+\item Autodiff functionals supported
+  \begin{itemize}\small
+  \item gradients: $\bigoh{1}$
+  \item Jacobians: $\bigoh{N}$
+  \item gradient-vector product (i.e., directional derivative): $\bigoh{1}$
+  \item Hessian-vector product: $\bigoh{N}$
+  \item Hessian: $\bigoh{N}$
+  \item gradient of trace of matrix-Hessian product: $\bigoh{N^2}$
+    \\ {\footnotesize (for SoftAbs RHMC)}
+  \end{itemize}
+\end{itemize}
+
+\sld{Parsing and compilation}
+%
+\begin{itemize}
+\item Stan code \myemph{parsed} to abstract syntax tree (AST)
+  \\ {\footnotesize (Boost Spirit Qi, recursive descent, lazy semantic
+    actions)}
+\item C++ model class \myemph{code generation} from AST
+  \\ {\footnotesize (Boost Variant)}
+\item C++ code \myemph{compilation}
+\item \myemph{Dynamic linking} for RStan, PyStan
+\end{itemize}
+
+
+\sld{Coding probability functions}
+%
+\begin{itemize}
+\item \myemph{Vectorized} to allow scalar or container arguments
+  \\ {\footnotesize (containers all same shape; scalars broadcast as necessary)}
+\item Avoid \myemph{repeated computations}, e.g. $\log \sigma$ in
+  \hspace*{-18pt}
+  {\small
+    \begin{eqnarray*}
+      \textstyle \log \, \mbox{\sf Normal}(y | \mu, \sigma)
+      & = & \textstyle \sum_{n=1}^N \log \, \mbox{\sf Normal}(y_n | \mu,\sigma)
+      \\[4pt]
+      & = & \textstyle \sum_{n=1}^N  - \log \sqrt{2\pi} \ - \log \sigma \ -
+      \frac{\textstyle y_n - \mu}{\textstyle 2\sigma^2}
+    \end{eqnarray*}
+  }
+\item recursive \myemph{expression templates} to broadcast and cache scalars,
+  generalize containers (arrays, matrices, vectors)
+\item \myemph{traits} metaprogram to \myemph{drop constants} (e.g., $-\log
+  \sqrt{2 \pi}$ or $\log \sigma$ if constant)
+  and calculate intermediate and return types
+\end{itemize}
+
+
 \end{document}
