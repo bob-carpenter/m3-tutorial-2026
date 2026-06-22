@@ -28,8 +28,8 @@ SEM Syntax (like `lavaan`, LISREL)
 
 \vspace{0.075in}
 
-* `brms`:  Bayesian Regression and Multilevelmodeling in Stan           
-Fit Bayesian generalized (non-)linear multivariate multilevel models.       
+* `brms`:  Bayesian Regression and Multilevel Modeling in Stan           
+Fits Bayesian generalized (non-)linear multivariate multilevel models.       
 R formula syntax (extended).      
 BRMS homepage: [https://paul-buerkner.github.io/brms/](https://paul-buerkner.github.io/brms/)
 
@@ -41,7 +41,7 @@ Python ecosystem:  [ArviZ](https://python.arviz.org/en/stable/)
 
 
 
-# Bayesian Workflow (elements of)
+# Bayesian Workflow (Elements Of)
 \vspace{-0.15in}
 
 * Exploratory data analysis / Data elicitation
@@ -54,7 +54,7 @@ Python ecosystem:  [ArviZ](https://python.arviz.org/en/stable/)
   + Sample diagnostics
   + Posterior predictive checks
 * Model comparison
-  + Leave-one out cross-validation
+  + Leave-one-out cross-validation
 
 
 
@@ -71,7 +71,7 @@ Python ecosystem:  [ArviZ](https://python.arviz.org/en/stable/)
 :::
 
 
-# `blavaan`: like `lavaan`, only Bayesian
+# `blavaan`: Like `lavaan`, Only Bayesian
 
 The R package [`lavaan`](https://lavaan.ugent.be/) provides a high-level syntax for specifying and fitting latent variable models
 using maximum likelihood estimation by default.
@@ -107,7 +107,7 @@ bfit <- blavaan::bsem(model, data = pisa.be.2003)
 \vspace{0.1in}
 
 ::: {.quote-block}
-> "The primary contribution of this paper is to describe and illustrate a new approach to Stan SEM estimation, which greatly improves the speed and efficiency of model."
+> "The primary contribution of this paper is to describe and illustrate a new approach to Stan SEM estimation, which greatly improves the speed and efficiency of model estimation."
 :::
 
 # Structural Equation Models
@@ -210,7 +210,7 @@ model <- '
 
 \vspace{0.1in}
 
-* Stan Case study: [Bayesian Structural Equation Modeling using `blavaan`](https://mc-stan.org/learn-stan/case-studies/sem.html)
+* Stan Case Study: [Bayesian Structural Equation Modeling using `blavaan`](https://mc-stan.org/learn-stan/case-studies/sem.html)
    + Confirmatory Factor Analysis (CFA), Latent Growth Curve Models, SEM Models, Bayesian Model Evaluation
 
 * Google Group:  [https://groups.google.com/g/blavaan](https://groups.google.com/g/blavaan)
@@ -219,7 +219,7 @@ model <- '
 
 
 
-# BRMS:  Bayesian Regression and Multilevelmodeling in Stan
+# BRMS:  Bayesian Regression and Multilevel Modeling in Stan
 \vspace{-0.1in}
 [BRMS package](https://paul-buerkner.github.io/brms/) function `brm` fits multilevel models
 
@@ -276,13 +276,14 @@ fit1 <- brm(Reaction ~ Days + (Days|Subject),
 From these arguments, BRMS
 
 \tightlist
-* generates the Stan code and input data (use functions `stancode` and `standata` to inspect)
+* generates the Stan code and input data           
+  (use functions `stancode` and `standata` to inspect)
 
 * runs CmdStanR to generate a sample
 
 * returns/manages the fitted model object
 
-* fitted model object has methods for plotting, and prediction, model checking, model comparison,
+* fitted model object has methods for plotting, prediction, model checking, and model comparison.
 
 
 
@@ -297,7 +298,7 @@ The conceptual structure of a multi-level model is: $y_i \sim \mathrm{D}(\, {\ma
 * $\eta$ is the linear predictor 
    + $\eta$ can be transformed by an inverse _link function_ $\mathit{f}$
    + $\eta$ can be rewritten as $\mathrm{X}\,\beta + \mathrm{Z\,u}$ where             
-     $\beta$ and $\mathrm{u}$ are population-level and group-level coefficients respectively and                   
+     $\beta$ and $\mathrm{u}$ are population-level and group-level coefficients, respectively, and                   
      $\mathrm{X}$ and $\mathrm{Z}$ are the corresponding design matrices      
 * $\theta$ denotes family-specific parameter(s)
 
@@ -379,7 +380,7 @@ cor(Intercept,Days)     0.07      0.30
 * Familiar syntax (for R users).
 
 \vspace{0.05in}
-* Handles many common models:  IRT, zero-inflated, additive distributional, phylogenetic, missing data imputation.
+* Handles many common models:  IRT, zero-inflated, additive, distributional, phylogenetic, and missing data imputation.
   + makes varying slope/ varying intercept models easy.
 
 \vspace{0.05in}
@@ -393,7 +394,7 @@ cor(Intercept,Days)     0.07      0.30
 
 \vspace{0.05in}
 * Large community of users
-  + majority of questions on Stan mailing list are BRMS.
+  + the majority of questions on the Stan mailing list are about BRMS.
   + many helpful community experts to answer them!
 
 # BRMS Tradeoffs
@@ -507,7 +508,7 @@ _The Model Can Often Only Be Understood in the Context of the Data_
 
 \hfill Gelman et al, 2017
 
-# EDA: What Patterns are in the Data?
+# EDA: What Patterns Are in the Data?
 
 \begincols
 \begincol{0.25\linewidth}        
@@ -537,14 +538,14 @@ _The Model Can Often Only Be Understood in the Context of the Data_
 \endcol
 \endcols
 
-# EDA: What Grouping Structure is Plausible?
+# EDA: What Grouping Structure Is Plausible?
 
 \begincols
 \begincol{0.50\linewidth}        
 
 * Group by WHO super-region
    + 1 region for the rich countries
-   + 6 geo-graphical regions
+   + 6 geographical regions
   
 * Group by ground monitor readings
    + 7 clusters
@@ -556,7 +557,7 @@ _The Model Can Often Only Be Understood in the Context of the Data_
 \endcols
 
 
-# EDA: What Grouping Structure is Plausible?
+# EDA: What Grouping Structure Is Plausible?
 \vspace{0.1in}
 
 \begincols
@@ -616,14 +617,14 @@ Cluster on ground monitor $\log(PM_{2.5})$
 # Gabry et al - Prior predictive checks
 
 \vspace{-0.1in}
-Visualize (or summarize) the prior marginal distribution of the data
+Visualize (or summarize) the prior marginal distribution of the data.
 
 \begin{figure}[h]
 \centering
 \includegraphics[height=0.7\textheight]{img/gabry_fig_4.png}
 \end{figure}
 
-Note:  histogram of just the simulated data also informative.
+Note: a histogram of just the simulated data is also informative.
 
 
 # Model Correctness Checks
@@ -644,5 +645,4 @@ Difficult to fit models may require reparameterization
 
 # Workflow in Action:  BRMS Notebook
 
-We use Jupyter lab to run the notebook `fit_air_brms.qmd`
-
+We use JupyterLab to run the notebook `fit_air_brms.qmd`.

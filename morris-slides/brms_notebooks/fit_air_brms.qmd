@@ -1,12 +1,19 @@
 ---
-title: BRMS - Air Pollution Example
-jupyter: ir
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.19.4
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+title: 'Dataset: Exposure to particulate matter less than 2.5 microns in diameter'
 ---
 
-
-
 ```{r}
-#| tags: []
 # import all libraries used in this notebook
 require(jsonlite)
 require(dplyr)
@@ -26,7 +33,6 @@ suppressMessages(library(tidybayes))
 ```
 
 ```{r}
-#| tags: []
 options(brms.backend = "cmdstanr")
 options(brms.normalize = FALSE)
 options(width = 100)
@@ -39,11 +45,9 @@ cmdstan_path()
 ```
 
 ```{r}
-#| scrolled: true
 # rebuild_cmdstan(cores=4)
 ```
 
-## Dataset: Exposure to particulate matter less than 2.5 microns in diameter
 
 The data for this model is in a JSON file, `data/pm_sites.json`.
 
@@ -60,6 +64,7 @@ Each observation consists of the following:
 - World Health Organization (WHO) super-region name
 - 6-component hierarchical clustering of ground monitor measurements
 
+
 ```{r}
 library(jsonlite)
 sites_json = fromJSON("data/pm_sites.json")
@@ -71,14 +76,6 @@ head(sites)
 
 ```{r}
 fit_complete_pool = brm(log_pm25 ~ 1 + log_sat, data=sites, cores=4, refresh=0)
-```
-
-```{r}
-fit_complete_pool = brm(log_pm25 ~ 0 + log_sat, data=sites, cores=4, refresh=0)
-```
-
-```{r}
-print(make_stancode(log_pm25 ~ 1 + log_sat, data=sites))
 ```
 
 The fitted model oject's print method provides information about the model and fitted parameters.
@@ -94,19 +91,29 @@ variables(fit_complete_pool)
 posterior_summary(fit_complete_pool)
 ```
 
-Plot posterior density of population-level parameters and post-warmup trace plots.
-
-```{r}
-plot(fit_complete_pool)
-```
-
 Inspect the specified prior: `prior_summary`
 
 ```{r}
 prior_summary(fit_complete_pool)
 ```
 
+Plot posterior density of population-level parameters and post-warmup trace plots.
+
+```{r}
+plot(fit_complete_pool)
+```
+
+Given the invocation
+
+`fit_complete_pool = brm(log_pm25 ~ 1 + log_sat, data=sites, cores=4, refresh=0)`
+
 BRMS creates the input data from dataframe `sites`.
+
+```{r}
+head(sites)
+```
+
+Function `standata` retrieves the input data.
 
 ```{r}
 standata_complete_pool = standata(fit_complete_pool)
@@ -155,6 +162,13 @@ fit_complete_pool
 ```{r}
 fit_complete_pool_data_asis
 ```
+
+```{r}
+stan_complete_pool_data_asis = stancode(fit_complete_pool_data_asis)
+cat(stan_complete_pool_data_asis)
+```
+
+**Takeaway**   zero-centered data is easier to sample!!!
 
 What are the default priors used?
 
@@ -264,7 +278,7 @@ After trial-and-error, we have determined the sampler settings for NUTS-HMC whic
 ```{r}
 fit_super_region = brm(log_pm25 ~ 1 + log_sat + (1 + log_sat | super_region_name),
                        warmup=400, iter=900, data=sites, cores=4, 
-                       max_treedepth=12, adapt_delta=0.9, refresh=200, seed=234098)
+                       max_treedepth=12, adapt_delta=0.9, refresh=100, seed=234098)
 ```
 
 ```{r}
