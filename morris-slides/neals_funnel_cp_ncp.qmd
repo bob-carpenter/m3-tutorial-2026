@@ -1,0 +1,292 @@
+---
+title: "Funnels and Parameterization"
+author: "Mitzi Morris"
+institute: "Stan Development Team"
+date: June 22, 2026
+format:
+  beamer:
+    highlight-style: tango
+    aspectratio: 169
+    pdf-engine: pdflatex
+    theme: metropolis
+    include-in-header: ../preamble.tex
+    navigation: horizontal
+    dev: png
+    colorlinks: true
+execute:
+  eval: false
+---
+
+# Multilevel Models
+
+For group-level parameters $\theta_1,\ldots,\theta_J$, a hierarchical prior
+shares information through a common location and scale.
+
+$$
+\begin{aligned}
+\theta_j \mid \mu, \sigma_\theta &\sim \textsf{normal}(\mu, \sigma_\theta),
+    \qquad j = 1,\ldots,J \\
+\sigma_\theta &\sim p(\sigma_\theta) \\
+\theta_j &= \mu + \sigma_\theta z_j,
+    \qquad z_j \sim \textsf{normal}(0,1)
+\end{aligned}
+$$
+
+\vspace*{12pt}
+
+
+\tightlist
+* Neal's funnel isolates the geometry created when one scale controls many effects.
+* Small $\sigma_\theta$ pulls group effects toward $\mu$; large $\sigma_\theta$ lets them differ.
+* Parameterization choice: sample $\theta_j$ directly, or sample standardized $z_j$ and transform.
+
+
+# Multilevel Models and Neal's Funnel
+
+* Neal's Funnel: extreme example of a challenging hierarchical prior
+
+\vspace*{-18pt}
+$$
+y \sim \textsf{normal}(0,3), \qquad
+x_n \sim \textsf{normal}(0,\exp(y/2)), \quad n = 1,\ldots,9.
+$$
+
+:::: {.columns}
+::: {.column width="44%"}
+\includegraphics[width=0.95\linewidth]{img/funnel.png}
+
+
+:::
+::: {.column width="54%"}
+\vspace{0.05in}
+
+\tightlist
+* Canonical example has 9 lower-level parameters $x_1,\ldots,x_9$.
+* One population-scale parameter $y$ controls their prior scale.
+* To explore neck of the funnel: small steps on x-axis, large steps on y-axis.
+* To explore mouth: large steps on x-axis, small steps on y-axis.
+:::
+::::
+
+
+
+# Funnel Example: Stan Implementations
+
+\fontsize{9pt}{9.5}\selectfont
+
+\begincols
+\begincol{0.46\linewidth}
+\textbf{Centered parameterization}
+
+\vspace{0.08in}
+
+```stan
+parameters {
+  real y;
+  vector[9] x;
+}
+model {
+  y ~ normal(0, 3);
+  x ~ normal(0, exp(y / 2));
+}
+```
+\endcol
+\begincol{0.52\linewidth}
+\textbf{Non-centered parameterization}
+
+\vspace{0.08in}
+
+```stan
+parameters {
+  real y_std;
+  vector[9] x_std;
+}
+transformed parameters {
+  real y = 3 * y_std;
+  vector[9] x = exp(y / 2) * x_std;
+}
+model {
+  y_std ~ std_normal();
+  x_std ~ std_normal();
+}
+```
+\endcol
+\endcols
+\normalsize
+
+# Low-data Regime
+
+\fontsize{10pt}{10.5}\selectfont
+
+:::: {.columns}
+::: {.column width="50%"}
+\textbf{Centered}
+
+\tightlist
+* Cannot explore neck of funnel.
+* Many divergences.
+* Low-data regime is prior-dominated.
+
+\vspace{0.04in}
+\includegraphics[width=0.75\linewidth]{img/funnel_fit_cp.png}
+:::
+::: {.column width="50%"}
+\textbf{Non-centered}
+
+\tightlist
+* Explores further.
+* No divergences in this example.
+* Works well when group effects are weakly identified.
+
+\vspace{0.1in}
+\includegraphics[width=0.78\linewidth]{img/funnel_fit_nc.png}
+:::
+::::
+\normalsize
+
+# What Happens as Data Grow?
+
+:::: {.columns}
+::: {.column width="62%"}
+\includegraphics[width=0.98\linewidth]{img/cp_vs_ncp.png}
+:::
+::: {.column width="36%"}
+\vspace{0.08in}
+
+\tightlist
+* 10 groups, intercept-only hierarchical logistic regression.
+* Fit model with 0, 4, 16, 4096 observations.
+* 20,000 draws; divergences in orange.
+* Low data: non-centered avoids the funnel.
+* More data: non-centered starts to warp.
+:::
+::::
+
+# Varying Slope / Varying Intercept Model
+
+Let $x_n$ include a column of ones for the group-level intercept and additional
+columns for group-level predictors.
+
+\vspace{-0.05in}
+
+$$
+\begin{aligned}
+y_n &\sim \textsf{normal}(\eta_n, \sigma) \\
+\eta_n &= \alpha + z_n \gamma + x_n^\top \beta_{g[n]} \\
+\beta_j &\sim \operatorname{multi\_normal}(\mu_\beta, \Sigma_\beta)
+\end{aligned}
+$$
+
+\tightlist
+* $j = 1,\ldots,J$ indexes groups.
+* $\beta_j$ is a length-$K$ vector: intercept, slope, and other group-level coefficients.
+* $\Sigma_\beta = \mathrm{diag}(\tau)\,\Omega\,\mathrm{diag}(\tau)$.
+
+# Varying Effects: Choose One Parameterization
+
+Both versions define the same model-scale object used by the likelihood:
+`array[J] vector[K] beta`.
+
+\fontsize{7.7pt}{8.1}\selectfont
+\begincols
+\begincol{0.49\linewidth}
+\textbf{Centered parameterization}
+
+```stan
+parameters {
+  vector[K] mu_beta;
+  vector<lower=0>[K] tau;
+  cholesky_factor_corr[K] L_Omega;
+  array[J] vector[K] beta;
+}
+model {
+  matrix[K, K] L_Sigma =
+    diag_pre_multiply(tau, L_Omega);
+
+  mu_beta ~ normal(0, 1);
+  tau ~ exponential(1);
+  L_Omega ~ lkj_corr_cholesky(2);
+
+  for (j in 1:J)
+    beta[j] ~ multi_normal_cholesky(mu_beta,
+                                    L_Sigma);
+}
+```
+\endcol
+\begincol{0.49\linewidth}
+\textbf{Non-centered parameterization}
+
+```stan
+parameters {
+  vector[K] mu_beta;
+  vector<lower=0>[K] tau;
+  cholesky_factor_corr[K] L_Omega;
+  matrix[K, J] beta_std;
+}
+transformed parameters {
+  array[J] vector[K] beta;
+  {
+    matrix[K, J] beta_mat =
+      rep_matrix(mu_beta, J)
+      + diag_pre_multiply(tau, L_Omega) * beta_std;
+    for (j in 1:J) beta[j] = beta_mat[, j];
+  }
+}
+model {
+  mu_beta ~ normal(0, 1);
+  tau ~ exponential(1);
+  L_Omega ~ lkj_corr_cholesky(2);
+  to_vector(beta_std) ~ std_normal();
+}
+```
+\endcol
+\endcols
+\normalsize
+
+# Common Likelihood After Either Choice
+
+\fontsize{8.5pt}{9}\selectfont
+```stan
+data {
+  int<lower=1> N;   int<lower=1> J;   int<lower=1> K;   int<lower=0> P;
+  array[N] int<lower=1, upper=J> group;
+  matrix[N, P] z_pop;        // population-level predictors
+  matrix[N, K] x_grp;        // first column is 1 for varying intercept
+  vector[N] y;
+}
+parameters {
+  real alpha;   vector[P] gamma;   real<lower=0> sigma;
+  // plus one varying-effects block: centered or non-centered
+}
+model {
+  alpha ~ normal(0, 1);   gamma ~ normal(0, 1);   sigma ~ exponential(1);
+  {
+    vector[N] eta = rep_vector(alpha, N) + z_pop * gamma;
+    for (n in 1:N) eta[n] += x_grp[n] * beta[group[n]];
+    y ~ normal(eta, sigma);
+  }
+  // plus priors from the selected varying-effects block
+}
+```
+\normalsize
+
+# Same Model, Different Geometry
+
+\tightlist
+* Centered:
+  + sample group coefficients directly from the population distribution.
+  + often better when each group has many observations.
+
+* Non-centered:
+  + sample standardized group coefficients.
+  + transform by population location, scale, and correlation.
+  + often better in weak-data or prior-dominated regimes.
+
+\vspace{0.06in}
+
+Choice depends on amount of information per group-level predictor plus what you know about the data.
+
+* [A General Framework for the Parametrization of Hierarchical Models, Papaspiliopoulos et al.](https://arxiv.org/pdf/0708.3797)
+
+* [Hamiltonian Monte Carlo for Hierarchical Models, Betancourt and Girolami](https://arxiv.org/pdf/1312.0906)
+

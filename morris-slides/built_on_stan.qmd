@@ -690,4 +690,17 @@ Difficult to fit models may require reparameterization
 
 # Workflow in Action:  BRMS Notebook
 
-We use JupyterLab to run the notebook `fit_air_brms.qmd`.
+We use JupyterLab to run the notebook `fit_air_brms.qmd`  to fit these three models -     
+complete pooling, partial pooling by WHO region, partial pooling by pollution cluster -      
+and then use BRMS and friends to do model criticism and comparison.
+
+
+
+# More Fun After Lunch!
+
+Thank you!
+
+Questions?
+
+
+

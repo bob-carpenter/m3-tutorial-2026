@@ -1,4 +1,5 @@
 ---
+title: 'Dataset: Exposure to particulate matter less than 2.5 microns in diameter'
 jupyter:
   jupytext:
     text_representation:
@@ -10,7 +11,6 @@ jupyter:
     display_name: R
     language: R
     name: ir
-title: 'Dataset: Exposure to particulate matter less than 2.5 microns in diameter'
 ---
 
 ```{r}
@@ -48,7 +48,6 @@ cmdstan_path()
 # rebuild_cmdstan(cores=4)
 ```
 
-
 The data for this model is in a JSON file, `data/pm_sites.json`.
 
 It consists of measurements of ambient ${PM}_{2.5}$ collected from ground monitors
@@ -63,7 +62,6 @@ Each observation consists of the following:
 - ${PM}_{2.5}$ measurements from via high-resolution satellite data and corresponding log values
 - World Health Organization (WHO) super-region name
 - 6-component hierarchical clustering of ground monitor measurements
-
 
 ```{r}
 library(jsonlite)
@@ -220,7 +218,7 @@ fit_prior_wi = brm(log_pm25 ~ 1 + log_sat, data=sites,
     prior = c(
       prior(normal(0, 1), class = Intercept),
       prior(normal(1, 1), class = b),
-      prior(normal(0, 1), class = sigma)),
+      prior(exponential(1), class = sigma)),
     sample_prior = "only", cores=4, refresh=0, seed=234098)
 ```
 
@@ -237,8 +235,8 @@ the implied data-generating process can still produce values more extreme than d
 fit_complete_pool_wi_priors = brm(log_pm25 ~ 1 + log_sat, data=sites, cores=4, refresh=0, seed=234098,
     prior = c(
     prior(normal(0, 2.5), class = Intercept),
-    prior(normal(0, 2.5), class = sigma),
-    prior(normal(0, 2.5), class = b))
+    prior(normal(0, 2.5), class = b),
+    prior(exponential(1), class = sigma))
     )
 ```
 
