@@ -1004,6 +1004,92 @@ f(\theta)
 \end{subitemize}
 \end{itemize}
 
+
+\sld{Monte Carlo estimation of $\pi$}
+
+\noindent
+\begin{minipage}[t]{0.65\textwidth}
+\begin{itemize}
+\item Estimating $\pi = 3.14\ldots$ via simulation is \emph{the} textbook application
+of Monte Carlo methods.
+\vfill
+\item Generate points \myemph{uniformly} within the square.
+\item \myemph{Area of circle} is: \\
+  \emph{proportion within circle} times \emph{square's area}.
+\item \myemph{Circle's area} is $\pi;$ \myemph{square's area} is 4.
+  \begin{subitemize}
+    \item radius $r = 1$ yields area $\pi \cdot r^2 = \pi$
+  \end{subitemize}
+\item \myemph{If} $X, Y \sim \mathsf{Uniform}((-1, 1))$, \myemph{then}
+  \vspace*{-4pt}
+  \begin{align*}
+    4 \cdot \mathrm{Pr}[X^2 + Y^2 \leq 1]
+    &= \mathbb{E}\!\left[4 \cdot \textrm{I}[X^2 + Y^2 \leq 1]\right]
+    \\
+    &= \pi.
+    \end{align*}
+\end{itemize}
+\end{minipage}
+%
+\hfill
+%
+\begin{minipage}[t]{0.35\textwidth}
+\vspace*{12pt}
+\hfill \includegraphics[height=\textwidth]{img/monte-carlo-pi.png}
+\end{minipage}
+\vfill
+
+
+\sld{Calculating $\pi$ with Stan}
+%
+\begin{stancode}
+generated quantities {
+  real<lower=-1, upper=1> x = uniform_rng(-1, 1);
+  real<lower=-1, upper=1> y = uniform_rng(-1, 1);
+  int<lower=0, upper=1> in_circle = hypot(x, y) <= 1;
+  int<lower=0, upper=4> pi = 4 * in_circle;
+}
+\end{stancode}
+\begin{itemize}
+\item \myemph{Simulate} $X$ and $Y$
+\item \myemph{Indicator} \texttt{in\_circle} is 1 if $(x, y)$ is in the circle, 0 otherwise.
+\begin{subitemize}
+\item Stan's hypoteneuse function: \Verb|hypot(a, b) = sqrt(a^2 + b^2)|
+\end{subitemize}
+\item \myemph{Mulitply by 4} to get \texttt{pi}, which over multiple draws has \myemph{expectation $\pi$}.
+\end{itemize}
+
+\sld{Fitting Stan model with CmdStanPy}
+%
+\begin{codein}
+m = csp.CmdStanModel(stan_file = 'pi.stan')
+s = m.sample(iter_sampling=100_000)
+s.summary()  # trimmed by hand
+\end{codein}
+\begin{codeout}
+               Mean      MCSE
+pi         3.142900  0.002599
+\end{codeout}
+\begin{itemize}
+\item Our \myemph{estimate} is $\widehat{\pi} = 3.143$
+\item 0.0026 is our \myemph{standard error} (i.e., standard deviation of estimator error)
+\item Rough \myemph{95\% confidence interval} is $\textrm{mean} \pm\, 2 \cdot \textrm{mcse} = (3.138, 3.148)$.
+\item True value $\pi=3.141\cdots$ within that interval.
+\end{itemize}
+
+
+\sld{Accuracy of Markov chain Monte Carlo}
+%
+\begin{itemize}
+\item Monte Carlo Integration computes the exact posterior to within any $\epsilon$
+  \begin{subitemize}
+  \item i.e., it is \emph{not} an approximation of the posterior like variational Bayes or a Laplace approxiamtion
+    \end{subitemize}
+\item Monte Carlo draws are i.i.d. by definition, but MCMC draws are not
+\item Central limit theorem extends to MCMC: expected error decreases at rate of $\frac{1}{\sqrt{N}}$. 
+\item Need $100 \times$ larger sample for each digit of accuracy
+\end{itemize}
+
 \sld{Parameter (co)variance estimation}
 %
 \begin{itemize}
@@ -1172,6 +1258,1669 @@ $\mathrm{Pr}\left[
 \includegraphics[height=1.5in]{img/lefty-posterior.pdf}
 \end{center}
 \item Vertical bars: central 95\% posterior interval $(-0.03,0.26)$
+\end{itemize}
+
+
+
+
+\mypart{Generalized linear models}
+
+\sld{Linear regression}
+%
+\begin{stancode}
+data {
+  int<lower=0> N;                       // # observations
+  vector[N] x;                          // covariates
+  vector[N] y;                          // outcomes
+}
+parameters {
+  real alpha;                           // intercept
+  real beta;                            // slope
+  real<lower=0> sigma;                  // error scale
+}
+model {
+  {alpha, beta} ~ normal(0, 5);         // prior
+  sigma ~ lognormal(0, 1);              // prior
+  y ~ normal(alpha + beta * x, sigma);  // likelihod
+}  
+\end{stancode}
+
+
+\sld{Distribution statements}
+%
+\begin{itemize}
+\item Distribution statements are vectorized, so these two are the same:
+\begin{stancode}
+  y ~ normal(alpha + beta * x, sigma);   
+
+  for (n in 1:N)
+    y[n] ~ normal(alpha + beta * x[n], sigma);
+\end{stancode}
+%
+\item These two target increment statements are also the same as above:
+\begin{stancode}  
+  target += normal_lupdf(y | alpha + beta * x, sigma);
+
+  for (n in 1:N)
+    target += normal_lupdf(y[n] | alpha + beta * x[n], sigma);
+\end{stancode}
+\end{itemize}
+
+\sld{Stan's constrained parameters}
+\begin{itemize}
+\item Scale \texttt{sigma} declared \texttt{real<lower=0>} with
+  prior \Verb|sigma ~ lognormal(0, 1)|.
+  \begin{subitemize}
+  \item Stan provides \myemph{uniform} distribution over parameters \myemph{satisfying constraints}.
+  \item \myemph{user-defined priors} multiply-in as \myemph{factors}.
+  \item $\sigma \in (0, \infty)$ is \myemph{log-transformed} to $\tau = \log \sigma \in (-\infty, \infty)$ for \myemph{sampling}.
+  \item adjust for \myemph{change-of-variables} from $\sigma$ to $\tau$
+\end{subitemize}
+{\small
+\vspace*{-4pt}
+\begin{align*}
+p(\tau)
+&= p(\exp(\tau))
+   \cdot \left| \frac{\textrm{d}}{\textrm{d}\tau} \exp(\tau) \right|
+\\[4pt] &= p(\sigma) \cdot \exp(\tau)
+\\[4pt] &= \textrm{lognormal}(\exp(\tau) \mid 0, 1) \cdot \exp(\tau).
+\end{align*}
+}
+\end{itemize}
+
+\sld{Posterior predictive inference}
+%
+\begin{itemize}
+\item Given ``training'' data $(x, y)$ and fresh covariates $x^\textrm{new}$, \myemph{sample}
+    from the \myemph{posterior predictive distribution}, 
+  $y^{\textrm{new}(m)} \sim p_{Y^\textrm{new} \mid x^\textrm{new}, x, y}$.
+\item Include new covariates as \myemph{additional data variables}.
+\begin{stancode}  
+data {
+  ...
+  int<lower=0> N_new;     // # predictions
+  vector[N_new] x_new;    // covariates for predictions
+}
+\end{stancode}
+\item Use a random number generator in \myemph{generated quantities block}.
+\begin{stancode}
+generated quantities {
+  vector[N_new] y_new = to_vector(normal_rng(alpha + beta * x_new, sigma));
+}  
+\end{stancode}
+\end{itemize}
+
+\sld{Poisson regression}
+\begin{itemize}
+\item Swap out data declaration and likelihood for Poisson.
+\begin{stancode}
+data {
+  int<lower=0> N;                       // # obs
+  vector[N] x;                          // covariates
+  array[N] int<lower=0> y;              // count outcomes
+}
+parameters {
+  real alpha;                           // intercept
+  real beta;                            // slope
+}
+model {
+  { alpha, beta } ~ normal(0, 5);       // priors
+  y ~ poisson_log(alpha + beta * x);    // likelihod
+  // note: poisson_log(mu) = poisson(exp(mu))
+}  
+\end{stancode}
+\end{itemize}
+
+\sld{Log odds}
+\begin{itemize}
+\item \myemph{Logistic regression} is a linear regression on the log odds of a binary outcome.
+\item A probability $p \in (0,1) $ has \myemph{odds}  $p:(1 - p)$ and \myemph{odds ratio} $\dfrac{p}{1 - p}$.
+\item The \myemph{log odds}, conventionally denoted \emph{logit}, and its inverse,
+  $$
+  \textrm{logit}(p) = \log \dfrac{p}{1 - p}
+  \qquad \qquad
+  \textrm{logit}^{-1}(v) = \dfrac{\exp(v)}{1 + \exp(v)}.
+  $$
+\begin{center}
+  \begin{tabular}{c|clr|l}
+    $p$ & odds & odds ratio & log odds & note \\ \hline
+    1/4 & 1:3 & (1/4) / (3/4) = 1/3 & $- \log 3$ & log odds negative if $p < 0$ \\
+    1/2 & 1:1 & (1/2) / (1/2) = 1 & $0$  & \small log odds 0 if $p = 1/2$ \\
+    3/4 & 3:1 & (3/4) / (1/4) = 3 & $\log 3$ & \small $\textrm{logit}(p) = -\textrm{logit}(1-p)$ symmetric
+  \end{tabular}
+\end{center}
+\end{itemize}
+
+\sld{Logistic sigmoid: \large $y = \textrm{logit}^{-1}(x) = \frac{\exp(x)}{1 + \exp(x)}$}
+\vspace*{-6pt}  
+\begin{center}
+\includegraphics[width=0.6\textwidth]{img/logistic_curve.pdf}
+\end{center} 
+
+\sld{Logistic regression}
+\begin{itemize}
+\item You guessed it---swap for logistic
+\end{itemize}
+\begin{stancode}
+data {
+  int<lower=0> N;                       // # obs
+  vector[N] x;                          // covariates
+  array[N] int<lower=0, upper=1> y;     // binary outcomes
+}
+parameters {
+  real alpha;                           // intercept
+  real beta;                            // slope
+}
+model {
+  {alpha, beta} ~ normal(0, 5);           // prior
+  y ~ bernoulli_logit(alpha + beta * x);  // log odds: alpha + beta * x
+}  
+\end{stancode}
+
+\sld{Multiple regression}
+\begin{itemize}
+\item Data $N \times K$ matrix (w. column of intercepts); slopes $K$-vector.
+\end{itemize}
+\begin{stancode}
+data {
+  int<lower=0> N;                       
+  int<lower=1> K;              // # covariates per outcome
+  matrix[N, K] x;              // data matrix
+  array[N] int<lower=0> y;              
+}
+parameters {
+  vector[K] beta;              // K slopes
+}
+model {
+  beta ~ normal(0, 5);         // vectorized prior, following likelihood
+  y ~ poisson_log(x * beta);   // vec-mat multiply (x * beta) is N-vector
+}  
+\end{stancode}
+
+\sld{Autoregressive models}
+\begin{itemize}
+\item A \myemph{times series} is just a sequence of points $v_1, v_2, \ldots, v_T$.
+\item An \myemph{AR(1)} model regresses on the previous point in time for $t > 1$,
+  $$
+  v_t \sim \textrm{normal}(\alpha + \beta \cdot \alpha_{t-1}, \sigma).
+  $$
+\item If $\beta \in (-1, 1)$, then as $t \rightarrow \infty$, the \myemph{stationary} distribution is
+$$
+  v_t \sim \textrm{normal}\!\left(\frac{\alpha}{1 - \beta}, \frac{\sigma}{1 - \beta^2}\right).
+  $$
+\item An \myemph{AR(k)} model is just a linear regression on the previous k points.
+\end{itemize}
+
+\sld{Autorgression in Stan}
+\begin{itemize}
+\item We can have an autoregressive data distribution or prior; either way
+\end{itemize}
+\begin{stancode}
+vector[T] v;                                          // data or param
+  
+real alpha; real<lower=0, upper=1> beta;              // stationary param
+v[1] ~ normal(alpha / (1 - beta),                     // marginal
+              sigma / sqrt(1 - beta^2));              
+v[2:T] ~ normal(alpha + beta * v[1:(T - 1)], sigma);  // AR(1)
+\end{stancode}
+\begin{itemize}
+\item Last line is equivalent to
+\end{itemize}
+\begin{stancode}
+for (t in 2:T)
+  v[t] ~ normal(alpha + beta * v[t-1], sigma); 
+\end{stancode}
+
+
+\mypart{Crowdsourcing}
+
+\sld{Bradley-Terry crowdsourcing model}
+\begin{itemize}
+\item Bradley and Terry (early 1950s) collected data on \myemph{consumers comparing
+    pairs of products}  to estimate their quality. 
+\item Products $j$ are parameterized with a \myemph{real valued quality}
+  $\alpha_j \in (-\infty, \infty)$.
+\item The $n$-th rating compares \myemph{products} $i_n$ and $j_n$, with \myemph{rating} $y_n = 1$ if product $i_n$ \myemph{preferred} to $j_n$
+\item Log odds of $i_n$ being better than $j_n$ is $\alpha_{i[n]} - \alpha_{j[n]}$,
+  $$
+  y_n \sim \textrm{bernoulli\_logit}(\alpha_{i[n]} - \alpha_{j[n]}).
+  $$
+\item Elo (1960s) rediscovered a rescaled variant and proposed on online update
+  \begin{subitemize}
+  \item update is via stochastic gradient descent (Robbins and Monro, early 1950s).
+  \end{subitemize}
+\end{itemize}
+
+\sld{Bradley-Terry code}
+\begin{stancode}
+data {
+  int<lower=0> N;                       // # matchups
+  int<lower-0> J;                       // # items
+  array[N] int<lower=1, upper=J> ii;    // first item
+  array[N] int<lower=1, upper=J> jj;    // second item
+  array[N] int<lower=0, upper=1> y;     // outcomes
+}
+parameters {
+  vector[J] alpha;                      // abilities (log odds scale)
+}
+model {
+  alpha ~ normal(0, 5);                        // prior
+  y ~ bernoulli_logit(alpha[ii] - alpha[jj]);  // vectorized likelihood
+
+  // equiv for (n in 1:N) y[n] ~ bernoulli_logit(alpha[ii[n]] - alpha[jj[n]]);
+}  
+\end{stancode}
+
+
+\sld{Item-response theory (1PL)}
+\begin{itemize}
+\item Used for \myemph{educational test design}.
+\item Response $y_n$ is 1 if student $j_n$ \myemph{correctly answered} test question $i_n$.
+\item Like Bradley-Terry, w.\ student \myemph{abilities} $\alpha_j$ and question \myemph{difficulties} $\beta_i$,
+  $$
+  y_n \sim \textrm{bernoulli}(\textrm{logit}^{-1}(\alpha_{j[n]} - \beta_{i[n]})).
+  $$
+\item In Stan,
+  \begin{stancode}
+    vector[J] alpha;  vector[I] beta; 
+    ... 
+    y ~ bernoulli_logit(alpha[jj] - beta[ii]); 
+  \end{stancode}
+\item The \myemph{one-parameter logistic} (1PL) involves difficulty parameter with ability being a ``nuisance'' required to match data.
+\end{itemize}
+
+\sld{Item-response theory (2PL)}
+\begin{itemize}
+\item Want to know how \myemph{discriminative} test items are
+  \begin{subitemize}
+  \item an item is discriminative if abilities greater than difficulty have high chance of
+    getting it correct and abilities lower than difficulty have low chance
+  \end{subitemize}
+\item Add discrimination $\delta_i > 0$ for items, and use
+  $$
+  y_n \sim \textrm{bernoulli}(\textrm{logit}^{-1}(\delta_{i[n]} \cdot ((\alpha_{j[n]} - \beta_{i[n]})).
+  $$
+\item As $\delta_i \rightarrow \infty$, if $\beta_j < \alpha_i$, then log odds go to $-\infty$ and if $\beta_j > \alpha_i$, log odds go to $\infty$.
+\end{itemize}
+\begin{stancode}
+vector[I] delta;
+... 
+y ~ bernoulli_logit(delta .* (alpha[jj] - beta[ii]));  // .* elementwise
+\end{stancode}
+
+
+\mypart{Hierarchical Models}{for repeated binary trials}
+
+
+\sld{Baseball batting ability}
+%
+\begin{itemize}
+\item Batters have a number of ``at-bats'' in a season, out of which they
+  get a number of ``hits'' (hits are a good thing)
+  \begin{subitemize}
+  \item details not relevant
+  \item \myemph{same approach applies to} \myemph{clinical trials} (BDA), pediatric 
+  surgery complications (BUGS), reviews on Yelps, tests in multiple classrooms, $\ldots$
+\end{subitemize}
+\item No player with higher than 40\% success rate since 1950s
+  \begin{subitemize}
+  \item and then only \emph{slightly higher} than 40\% with \emph{low at-bats}
+  \end{subitemize}
+\item No player (excluding ``bowlers'') has success rate much less than 20\%.
+\end{itemize}
+
+
+\sld{Baseball data}
+%
+\\
+\begin{minipage}[t]{0.59\textwidth}
+\small
+\begin{itemize}
+\item (\myemph{top}) \myemph{Hits~vs.~at-bats} for 2006 American League (excluding pitchers)
+\item (\myemph{bottom}) \myemph{Average vs.\ at-bats}
+\begin{subitemize}
+\item blue line is pooled average (0.271) 
+\item red is +/- 2 binomial std devs 
+\end{subitemize}
+\vspace*{24pt}
+\item \myemph{Not much variation}; it's related to trials
+\item \myemph{Success rate increases} with number of trials
+  \begin{subitemize}
+  \item at-bats should be a covariate!
+  \end{subitemize}
+\end{itemize}
+\end{minipage}
+%
+\begin{minipage}[t]{0.40\textwidth}
+\begin{center}
+\vspace*{-36pt}
+\hfill \includegraphics[height=1.4in]{img/al06hitsvsatbats.png}
+\\[-18pt]
+\hfill \includegraphics[height=1.4in]{img/bball-eda.pdf}
+\end{center}
+\end{minipage}
+
+
+\sld{Pooling data (aka sharing strength)}
+%
+\begin{itemize}
+\item \myemph{How do we estimate} with a \myemph{small number of trials}? 
+  e.g., 6 hits in 10 at bats, or 0 in 5?
+  \begin{subitemize}
+  \item maximum likelihood estimates of 0.6 or 0.0 are \myemph{absurd}.
+  \end{subitemize}
+\item Same logic applies to players with 40 hits in 131 at bats or 152 hits in 537.
+\item \myemph{No pooling}: estimate each player separately (assume no similarities)
+\item \myemph{Complete pooling}: estimate all players together (assume no differences)
+\item \myemph{Partial pooling}: somewhere in the middle (let data decide)
+\begin{subitemize}
+\item use information about other players (i.e., the population) as warranted by the variation in the data
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Complete pooling model}
+%
+\begin{subitemize}
+\item Assume players all have \myemph{same ability} \texttt{phi}.
+  \begin{subitemize}
+  \item implicit uniform prior 
+  \end{subitemize}
+\begin{stancode}
+data {
+  int<lower=0> N;              // items
+  array[N] int<lower=0> K;     // trials
+  array[N] int<lower=0> y;     // successes
+}
+parameters {
+  real<lower=0, upper=1> phi;  // chance of success
+}
+model {
+  y ~ binomial(K, phi);        // likelihood
+}
+\end{stancode}
+\end{subitemize}
+
+
+\sld{No pooling model code}
+%
+\begin{subitemize}
+\item Assume each player has independent ability \texttt{phi[n]}.
+  \begin{subitemize}
+  \item implicit uniform prior 
+  \end{subitemize}
+\begin{stancode}
+data {
+  int<lower=0> N;
+  array[N] int<lower=0> K;
+  array[N] int<lower=0> y;
+}
+parameters {
+  vector<lower=0, upper=1>[N] phi;
+}
+model {
+  y ~ binomial(K, phi);
+}
+\end{stancode}
+\end{subitemize}
+
+
+\sld{Hierarchical Models}
+%
+\begin{itemize}
+\item Hierarchical models principled way to \myemph{determine how much
+    pooling}.
+\begin{subitemize}
+\item Alternative is to stipulate all or nothing in likelihood (cf. ``subjective'').
+\end{subitemize}
+\item \myemph{Pull estimates} toward the \myemph{population mean} based on amount of
+\myemph{variation} in population
+\begin{subitemize}
+\item \myemph{low variance} population: more pooling
+\item \myemph{high variance} population: less pooling
+\end{subitemize}
+\item \myemph{In limit}
+\begin{subitemize}
+\item as variance goes to 0, get complete pooling
+\item as variance goes to $\infty$, get no pooling
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Hierarchical Batting Ability}
+%
+\begin{itemize}
+\item Instead of fixed priors, \myemph{estimate priors} along with other parameters
+\item Still only \myemph{uses data once} for a single model fit (i.e., not empirical Bayes)
+\item \myemph{Data}: $y_n, K_n$: hits, at-bats for player $n$
+\item \myemph{Parameters}: $\phi_n$: ability for player $n$
+\item \myemph{Hyperparameters}: $\alpha, \beta$: population mean and variance
+\item \myemph{Hyperpriors}: fixed (constant) priors on $\alpha$ and $\beta$
+\end{itemize}
+
+
+\sld{Hierarchical Batting Model {\small (cont.)}}
+%
+\begin{eqnarray*}
+\theta &  \sim & \distro{Uniform}(0,1)
+\\[4pt]
+\kappa & \sim & \distro{Pareto}(1.5)
+\\[4pt]
+\phi_n & \sim & \distro{Beta}(\kappa \, \theta, \ \kappa \, (1 - \theta))
+\\[4pt]
+y_n & \sim & \distro{Binomial}(K_n, \phi_n)
+\end{eqnarray*}
+\begin{itemize}
+\item $\theta$ is prior mean; \ $\kappa$ is prior count (plus 2). 
+\item \myemph{Pareto} provides \myemph{power law} distribution on prior count:
+{\small
+\[
+\distro{Pareto}(u \, | \, \alpha)
+\ \propto \
+\frac{\alpha}
+     {u^{\alpha + 1}}
+\]
+}
+\item Could (\emph{should}!) use more informative prior on hyperparameter $\theta$.
+\end{itemize}
+
+
+\sld{Partial Pooling Model in Stan}
+%
+\begin{stancode}
+data {
+  int<lower=0> N;
+  array[N] int<lower=0> K;
+  array[N] int<lower=0> y;
+}
+parameters {
+  real<lower=0, upper=1> theta;
+  real<lower=1> kappa;
+  vector<lower=0, upper=1>[N] phi;
+}
+model {
+  kappa ~ pareto(1, 1.5);             // hyperprior
+  theta ~ beta(kappa * theta,         // prior
+               kappa * (1 - theta));
+  y ~ binomial(K, theta);             // likelihood
+}
+\end{stancode}
+
+
+\sld{Posterior for Hyperpriors}
+%
+\\[8pt]
+\begin{minipage}[t]{0.55\textwidth}
+\begin{itemize}
+\item \myemph{Scatterplot of draws}
+\item Crosshairs at \myemph{mean}
+\item $\kappa = \alpha +
+  \beta$ \ and \ $\theta = \frac{\alpha}{\alpha + \beta}$
+\item \myemph{Prior mean} estimate: $\hat{\theta} = 0.271$
+\item \myemph{Prior count} estimate: $\hat{\kappa} = 400$
+\item Together yield \myemph{prior standard deviation} of only 0.022\myemph{!!!}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[t]{0.45\textwidth}
+\vfill
+\mbox{ } \ \ \ \ \ \ \includegraphics[height=1.4in]{img/baseball-beta-posterior-scatter.png}
+\vfill
+\end{minipage}
+
+
+\sld{Posterior Ability {\normalsize (High Avg Players)}}
+%
+\vspace*{-8pt}
+\begin{center}
+\includegraphics[height=2.25in]{img/batting-ability-posteriors.png}
+\end{center}
+
+
+\sld{Who's the Best?}
+%
+\vspace*{-2pt}\small
+\begin{itemize}
+\item \myemph{Posterior probability} that player $n$ has \myemph{highest ability} is
+\[
+\mbox{Pr}[\phi_n \geq \max(\phi) \, | \, y]
+\]
+\item Code event with \myemph{indicator variable} in Stan
+\begin{stancode}
+generated quantities {
+  int<lower=0, upper=1> is_best[N];
+  real max_phi = max(phi);  // compute this just once
+  for (n in 1:N)
+    is_best[n] = phi[n] >= max_phi;
+}
+\end{stancode}
+\end{itemize}
+
+
+\sld{Multiple Comparisons}
+%
+\begin{itemize}
+\item Hierarchical model \myemph{adjusts for multiple comparisons} by pulling
+  all estimates toward population mean
+\item \small cf. Gelman, A., Hill, J. and Yajima, M., 2012. Why we (usually) don't have to worry about multiple comparisons. {\slshape Journal of Research on Educational Effectiveness}, 5(2):189--211.
+\end{itemize}
+
+
+\sld{Results for 2006 AL Season}
+%
+\begin{center}
+{\small
+\begin{tabular}{rrrr}
+\emph{Player} & \emph{Average} & \emph{At-Bats} & $\Prob{\text{best}}$
+\\ \hline
+Mauer & .347 & 521 & 0.12
+\\
+Jeter & .343 & 623 & 0.11
+\\
+& .342 & 482 & 0.08
+\\
+& .330 & 648 & 0.04
+\\
+& .330 & 607 & 0.04
+\\
+& .367 & 60 & 0.02
+\\
+& .322 & 695 & 0.02
+\end{tabular}
+}
+\end{center}
+\begin{itemize}
+\item Posterior probabilities reflect uncertainty in data
+\item In the \myemph{last game of the season} (out of 162), \myemph{Joe Mauer} (Minnesota Twins) edged out \myemph{Derek Jeter} (NY Yankees).
+\vfill
+\item It's \myemph{a lot of luck}; sorry for \myemph{ruining your enjoyment} of sports statistics.
+\end{itemize}
+
+
+\sld{Efron \& Morris (1975) Data}
+%
+\begin{itemize}
+\item From their classic analysis for shrinkage/empirical Bayes
+\item Picked batters with 45 at bats on a given day (artificial!)
+\end{itemize}
+\begin{stancode}
+   FirstName   LastName Hits At.Bats Rest.At.Bats Rest.Hits
+1    Roberto   Clemente   18      45          367       127
+2      Frank   Robinson   17      45          426       127
+3      Frank     Howard   16      45          521       144
+4        Jay  Johnstone   15      45          275        61
+5        Ken      Berry   14      45          418       114
+6        Jim    Spencer   14      45          466       126
+7        Don  Kessinger   13      45          586       155
+8       Luis   Alvarado   12      45          138        29
+9        Ron      Santo   11      45          510       137
+10       Ron    Swaboda   11      45          200        46
+11      Rico Petrocelli   10      45          538       142
+\end{stancode}
+
+
+\sld{Pooling vs. No-Pooling Estimates}
+%
+\vspace*{-0.15in}
+\begin{center}
+\includegraphics[height=2.25in]{img/pool-no-pool.png}
+\end{center}
+\vspace*{-0.35in}
+\begin{subitemize}
+\item complete pooling, no pooling, partial pooling, (log odds)
+\end{subitemize}
+
+\sld{Ranking}
+\begin{stancode}
+generated quantities {
+  int<lower=1, upper=N> rnk[N];      // rank of player n
+  {
+    int dsc[N];
+    dsc = sort_indices_desc(theta);
+    for (n in 1:N)
+      rnk[dsc[n]] = n;
+  }
+\end{stancode}
+
+
+\sld{Posterior Ranks}
+%
+\begin{center}
+\includegraphics[height=2.0in]{img/rankings-pool.png}
+\end{center}
+
+\sld{Who is Best? {\normalsize better Stan code}}
+\begin{stancode}
+generated quantities {
+  ...
+  int<lower=0, upper=1> is_best[N];
+  ...
+  for (n in 1:N)
+    is_best[n] = (rnk[n] == 1);  // more efficient
+  ...
+\end{stancode}
+
+\sld{Who is Best? Posterior}
+\begin{center}
+\includegraphics[height=2.0in]{img/who-is-best.png}
+\end{center}
+
+
+\sld{Posterior Predictive Inference}
+%
+\begin{itemize}
+\item How do we predict new outcomes (e.g., rest of season)?
+\begin{stancode}
+data {
+  int<lower=0> K_new[N];       // new trials
+  int<lower=0> y_new[N];       // new outcomes
+  ...
+generated quantities {
+  int<lower=0> z[N];  // posterior prediction
+  for (n in 1:N)
+    z[n] = binomial_rng(K_new[n], theta[n]);
+\end{stancode}
+\item Full Bayes accounts for two sources of uncertainty
+\begin{subitemize}
+\item estimation uncertainty (built into posterior)
+\item sampling uncertainty (explicit RNG function)
+\end{subitemize}
+\end{itemize}
+
+\sld{Posterior Predictions}
+\begin{center}
+\includegraphics[height=2in]{img/posterior-predictions.png}
+\end{center}
+
+
+\sld{Posterior Predictive Check}
+%
+\begin{itemize}
+\item Replicate data from paraemters
+\end{itemize}
+\begin{stancode}
+generated quantities {
+  ...
+  for (n in 1:N)
+    y_rep[n] = binomial_rng(K[n], theta[n]);
+  for (n in 1:N)
+    y_pop_rep[n] = binomial_rng(K[n],
+                               beta_rng(phi * kappa,
+                                        (1 - phi) * kappa));
+  min_y_rep = min(y_rep);
+  sd_y_rep = sd(to_vector(y_rep));
+  p_min = (min_y_rep >= min_y);
+  p_sd = (sd_y_rep >= sd_y);
+}
+\end{stancode}
+
+\sld{Posterior $p$-Values}
+\begin{center}
+\includegraphics[height=2in]{img/posterior-p-values.png}
+\end{center}
+
+
+\sld{Calibration and Sharpness}
+%
+\begin{itemize}
+\item \myemph{Calibration}:  A model is calibrated if the 50\% intervals
+  contain roughly 50\% of the true intervals
+\begin{subitemize}
+\item technically, we expect $\mbox{Binomial}(N, 0.5)$ of $N$
+  parameters to fall in their 50\% intervals
+\item we can evaluate with held-out data using cross-validation
+\end{subitemize}
+%
+\item \myemph{Sharpness}: One posterior is sharper than another if it
+  concentrates more posterior mass around the true value
+\begin{subitemize}
+\item e.g., central posterior intervals of interest are narrower
+\vfill
+\item \footnotesize{see: Gneiting, Balabdaoui, and Raftery (2007) Probabilistic
+    forecasts, calibration and sharpness. {\slshape JRSS B}.}
+\end{subitemize}
+\end{itemize}
+
+
+\sld{More in the Case Study}
+%
+\begin{itemize}
+%
+\item This talk roughly followed my Stan case study:
+\begin{subitemize}
+\item Hierarchical Partial Pooling for Repeated Binary Trials
+\end{subitemize}
+%
+\item Available under case studies at
+\begin{subitemize}
+\item \url{http://mc-stan.org/documentation}.
+\end{subitemize}
+%
+\end{itemize}
+
+
+\mypart{The Stan Language}{}
+
+
+\sld{Stan is a programming language}
+%
+\begin{itemize}
+\item \myemph{Not} a graphical specification language like BUGS or JAGS
+\item Stan is a Turing-complete imperative programming language \myemph{for specifying differentiable log densities} and \myemph{posterior predictive inferences}.
+\begin{subitemize}
+\item reassignable local variables and scoping
+\item full conditionals and loops
+\item functions (including recursion)
+\end{subitemize}
+\item With automatic ``black-box'' inference on top (though even that is tunable)
+\item Programs computing same thing may have different efficiency
+\end{itemize}
+
+
+\sld{Basic program blocks}
+%
+\begin{itemize}
+\item \myemph{\tt\bfseries data} \ (once)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare data types, sizes, and constraints
+  \item {\slshape execute}: read from data source, validate constraints
+  \end{itemize}
+  %
+\item \myemph{\tt\bfseries parameters} \ (every log prob eval)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare parameter types, sizes, and constraints
+  \item {\slshape execute}: transform to constrained, Jacobian
+  \end{itemize}
+  %
+\item \myemph{\tt\bfseries model} \ (every log prob eval)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: statements defining posterior density
+  \item {\slshape execute}: execute statements
+  \end{itemize}
+\end{itemize}
+
+
+\sld{Derived variable blocks}
+%
+\begin{itemize}
+\item \myemph{\tt\bfseries transformed data} (once after data)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare and define transformed data variables
+  \item {\slshape execute}: execute definition statements, validate constraints
+  \end{itemize}
+  %
+\item \myemph{\tt\bfseries transformed parameters} (every log prob eval)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare and define transformed parameter vars
+  \item {\slshape execute}: execute definition statements, validate constraints
+  \end{itemize}
+  %
+\item \myemph{\tt\bfseries generated quantities} (once per draw,
+  \code{double} type)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare and define generated quantity
+    variables; \\
+    includes pseudo-random number generators
+    \\
+    {\footnotesize (for posterior predictions, event probabilities,
+      decision making)}
+  \item {\slshape execute}: execute definition statements, validate constraints
+  \end{itemize}
+  %
+\end{itemize}
+
+
+\sld{Reading and transforming data}
+%
+\begin{itemize}
+\item Only done once for optimization or sampling (per chain)
+\item Read data
+\begin{subitemize}
+\item read data variables from memory or file stream
+\item validate data
+\end{subitemize}
+\item Generate transformed data
+\begin{subitemize}
+\item execute transformed data statements
+\item validate variable constraints when done
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Evaluating the log density}
+%
+\begin{itemize}
+\item \emph{Given} parameter values on unconstrained scale
+\item Builds expression graph for log density (start at 0)
+\item Inverse transform parameters to constrained scale
+\begin{subitemize}
+\item constraints involve non-linear transforms
+\item e.g.,  positive constrained $x$ to unconstrained $y = \log x$
+\end{subitemize}
+\item account for curvature in change of variables
+\begin{subitemize}
+\item e.g., unconstrained $y$ to positive $x = \log^{-1}(y) =
+  \exp(y)$
+\item e.g., add log Jacobian determinant, $\log |\frac{d}{dy} \exp(y)| = y$
+\end{subitemize}
+\item Execute model block statements to increment log density
+\end{itemize}
+
+\sld{Evaluating gradients}
+%
+\begin{itemize}
+\item Log density evaluation builds up expression graph
+\begin{subitemize}
+\item templated overloads of functions and operators
+\item efficient arena-based memory management
+\end{subitemize}
+\item Compute gradient in backward pass on expression graph
+\begin{subitemize}
+\item propagate partial derivatives via chain rule
+\item work backwards from final log density to parameters
+\item dynamic programming for shared subexpressions
+\end{subitemize}
+\item Linear multiple of time to evaluate log density
+\end{itemize}
+
+
+\sld{Evaluating generated quantities}
+%
+\begin{itemize}
+\item \myemph{Given} parameter values
+\item Once per iteration (not once per leapfrog step)
+\item May involve (pseudo) random-number generation
+\begin{subitemize}
+\item Executed generated quantity statements
+\item Validate values satisfy constraints
+\end{subitemize}
+\item Typically used for
+\begin{subitemize}
+\item Event probability estimation
+\item Predictive posterior estimation
+\end{subitemize}
+\item Efficient because evaluated with \code{double} types (no autodiff)
+\end{itemize}
+
+
+\sld{Variable transforms}
+%
+\begin{itemize}
+\item Code HMC and optimization with $\mathbb{R}^n$ \myemph{support}
+\item Transform constrained parameters to unconstrained
+  \vspace*{-2pt}
+  {\small
+    \begin{itemize}
+    \item lower (upper) bound: offset (negated) log transform
+    \item lower and upper bound: scaled, offset logit transform
+    \item simplex: centered, stick-breaking logit transform
+    \item ordered: free first element, log transform offsets
+    \item unit length: spherical coordinates
+    \item covariance matrix: Cholesky factor positive diagonal
+    \item correlation matrix: rows unit length via quadratic stick-breaking
+    \end{itemize}
+  }
+\end{itemize}
+
+
+\sld{Variable transforms (cont.)}
+%
+\begin{itemize}
+\item Inverse transform from unconstrained $\mathbb{R}^n$
+\item Evaluate log probability in model block on natural scale
+\item Optionally adjust log probability for change of variables
+\begin{subitemize}
+\item adjustment for MCMC and variational, not MLE
+\item add log determinant of inverse transform Jacobian
+\item automatically differentiable
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Variable and expression types}
+%
+\\
+\spc Variables and expressions are \myemph{strongly, statically typed}.
+\begin{subitemize}
+\item \myemph{Primitive}: {\tt\small int}, \ {\tt\small real}
+\item \myemph{Matrix}: {\tt\small matrix[M,N]}, \ {\tt\small vector[M]}, \ {\tt\small row\_vector[N]}
+\item \myemph{Bounded}: primitive or matrix, with
+  \\ {\tt\small <lower=L>}, \ {\tt\small <upper=U>}, \ {\tt\small <lower=L,upper=U>}
+\item \myemph{Constrained Vectors}: {\tt\small simplex[K]}, \ {\tt\small
+    ordered[N]}, {\tt\small pos\_ordered[N]}, {\tt\small sum\_to\_zero[K]}
+  \\ {\tt\small positive\_ordered[N]}, \ {\tt\small unit\_length[N]}
+\item \myemph{Constrained Matrices}: {\tt\small cov\_matrix[K]}, \ {\tt\small
+    corr\_matrix[K]}, \ {\tt\small cholesky\_factor\_cov[M,N]}, \
+  {\tt\small cholesky\_factor\_corr[K]}, \ {\tt\small row\_stochastic\_matrix[M, N]},
+  \ {\tt\small column\_stochastic\_matrix[M, N]}, 
+\item \myemph{Arrays:}  of any type (and dimensionality) \ {\tt\small array[N] T}
+\end{subitemize}
+
+
+\sld{Integers and reals}
+%
+\begin{itemize}
+\item Different types (conflated in BUGS, JAGS, and R)
+\item Distributions and assignments care
+\item Integers may be assigned to reals but not vice-versa
+\item Reals have not-a-number, and positive and negative infinity
+\item Integers single-precision up to +/- 2 billion
+\item Integer division rounds (Stan provides warning)
+\item Real arithmetic is inexact and reals should not be (usually) compared with \code{==}
+\end{itemize}
+
+
+\sld{Arrays, vectors, and matrices}
+%
+\begin{itemize}
+\item Stan separates arrays, matrices, vectors, row vectors
+\item Which to use?
+\item Arrays allow most efficient access (no copying)
+\item Arrays stored first-index major (i.e., 2D are row major)
+\item Vectors and matrices required for matrix and linear algebra functions
+\item Matrices stored column-major (memory locality matters)
+\item Are not assignable to each other, but there are conversion functions
+\end{itemize}
+
+
+\sld{Logical operators}
+%
+\vfill
+\noindent\spc
+{\footnotesize
+  \begin{tabular}{c|ccl|l}
+    {\it Op.} & {\it Prec.} & {\it Assoc.} & {\it
+      Placement} & {\it Description}
+    \\ \hline \hline
+    \code{||} & 9 & left & binary infix & logical or
+    \\ \hline
+    \Verb|&&| & 8 & left & binary infix & logical and
+    \\ \hline
+    \Verb|==| & 7 & left & binary infix & equality
+    \\
+    \Verb|!=| & 7 & left & binary infix & inequality
+    \\ \hline
+    \Verb|<| & 6 & left & binary infix & less than
+    \\
+    \Verb|<=| & 6 & left & binary infix & less than or equal
+    \\
+    \Verb|>| & 6 & left & binary infix & greater than
+    \\
+    \Verb|>=| & 6 & left & binary infix & greater than or equal
+  \end{tabular}
+}
+\vfill
+\vfill
+
+
+\sld{Arithmetic and matrix operators}
+%
+\vfill
+\noindent\spc
+{\footnotesize
+  \begin{tabular}{c|ccl|l}
+    {\it Op.} & {\it Prec.} & {\it Assoc.} & {\it
+      Placement} & {\it Description}
+    \\ \hline \hline
+
+    \code{+} & 5 & left & binary infix & addition
+    \\
+    \code{-} & 5 & left & binary infix & subtraction
+    \\ \hline
+    \code{*} & 4 & left & binary infix & multiplication
+    \\
+    \code{/} & 4 & left & binary infix & (right) division
+    \\ \hline
+    \Verb|\| & 3 & left & binary infix & left division
+    \\ \hline
+    \code{.*} & 2 & left & binary infix & elementwise multiplication
+    \\
+    \code{./} & 2 & left & binary infix & elementwise division
+    \\ \hline
+    \code{!} & 1 & n/a & unary prefix & logical negation
+    \\
+    \code{-} & 1 & n/a & unary prefix & negation
+    \\
+    \code{+} & 1 & n/a & unary prefix & promotion (no-op in Stan)
+    \\ \hline
+    \Verb|^| & 2 & right & binary infix & exponentiation
+    \\ \hline
+    \code{'} & 0 & n/a & unary postfix & transposition
+    \\ \hline \hline
+    \code{()} & 0 & n/a & prefix, wrap & function application
+    \\
+    \code{[]} & 0 & left & prefix, wrap & array, matrix indexing
+  \end{tabular}
+}
+
+
+\sld{Assignment operators}
+%
+\vfill
+\noindent\spc
+{\footnotesize
+  \begin{tabular}{c|ccl|l}
+    {\it Op.} & {\it Description} \\ \hline \hline
+    \code{=} & assignment \\
+    \code{+=} & compound add and assign \\
+    \code{-=} & compound subtract and assign \\
+    \code{*=} & compound multiply and assign \\
+    \code{/=} & compound divide and assign \\
+    \code{.*=} & compound elementwise multiply and assign \\
+    \code{./=} & compound elementwise divide and assign \\
+
+  \end{tabular}
+}
+%
+\begin{itemize}
+\item these work with all relevant matrix types
+\begin{subitemize}
+\item e.g., \Verb|matrix *= matrix;|
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Built-in functions}
+%
+\begin{itemize}
+\item All built-in \myemph{C++ functions and operators}
+  \\
+  {\footnotesize C math, TR1, C++11, including all trig, pow, and
+    special log1m, erf, erfc, fma, atan2, etc.}
+\item Extensive library of \myemph{statistical functions}
+  \\
+  {\footnotesize e.g., softmax,
+    log gamma and digamma functions, beta functions, Bessel functions of
+    first and second kind, etc.}
+  %
+\item Efficient, arithmetically stable \myemph{compound functions}
+  \\
+  {\footnotesize e.g., multiply log, log sum of
+    exponentials, log inverse logit}
+\end{itemize}
+
+
+\sld{Built-in matrix functions}
+%
+\begin{itemize}\small
+\item \myemph{Basic arithmetic}: all arithmetic operators
+\item \myemph{Elementwise arithmetic}: vectorized operations
+\item \myemph{Solvers}: matrix division, (log) determinant,
+  inverse
+\item \myemph{Decompositions}: QR, Eigenvalues and Eigenvectors,
+  \\
+  Cholesky factorization, singular value decomposition
+\item \myemph{Compound Operations}: quadratic forms, variance scaling, etc.
+\item \myemph{Ordering, Slicing, Broadcasting}: sort, rank, block, rep
+\item \myemph{Reductions}: sum, product, norms
+\item \myemph{Specializations}: triangular, positive-definite,
+\end{itemize}
+
+
+\sld{Atomic statements}
+%
+\begin{itemize}
+\item \myemph{Distribution}: \ {\footnotesize \Verb|y ~ normal(mu,sigma)|}
+  \ \ \ {\footnotesize (\myemph{increments log probability})}
+\item \myemph{Increment log density}: \ {\footnotesize target += lp;}
+\item \myemph{Assignment}: \  {\footnotesize \code{y\_hat = x * beta};}
+\end{itemize}
+
+
+\sld{Block statements}
+%
+\begin{itemize}
+\item \myemph{Block}: \ {\footnotesize \Verb|{ ...; ...; ...; }|}
+  \hfill {\footnotesize
+    (allows initial local variables)}
+\end{itemize}
+
+\sld{Control statements}
+%
+\begin{itemize}
+\item \myemph{For loop}: \ {\footnotesize \code{for (n in 1:N) ...}}
+\item \myemph{While loop}: \ {\footnotesize \code{while (cond) ...}}
+\item \myemph{Conditional}: \ {\footnotesize
+    \code{if (cond) ...; else if (cond) ...;  else ...;}}
+\item \myemph{Break}: \ {\footnotesize \code{break}}
+\item \myemph{Continue}: \ {\footnotesize \code{continue}}
+\end{itemize}
+
+\sld{Statements with side effects}
+%
+\begin{itemize}
+\item \myemph{Print}: \ {\footnotesize \code{print("theta=", theta);}}
+\item \myemph{Reject}:
+\ {\footnotesize
+    \code{reject("arg to foo must be positive, found y=", y);}}
+\end{itemize}
+
+
+\sld{Distribution statement increments target}
+%
+\begin{itemize}
+\item A Stan program defines a log posterior
+\begin{subitemize}
+\item typically through log joint and Bayes's rule
+\end{subitemize}
+\item Sampling statements are just ``syntactic sugar''
+\item A shorthand for incrementing the log posterior
+\item The following define the same$^*$ posterior
+\begin{itemize}
+\item \Verb|y ~ poisson(lambda);|
+\item \texttt{target += poisson\_lupdf(y | lambda);}
+\end{itemize}
+\item ${}^{*}$ up to a constant
+\item Sampling statement drops constant terms
+\end{itemize}
+
+
+
+\sld{Local scope blocks}
+%
+\begin{itemize}
+\item
+\begin{Verbatim}
+  y ~ bernoulli(theta);
+\end{Verbatim}
+is more efficient with sufficient statistics
+{\small
+\begin{Verbatim}
+  {
+    real sum_y;  // local variable
+    sum_y = 0;
+    for (n in 1:N)
+      sum_y = sum_y + y[n];   // reassignment
+    sum_y ~ binomial(N, theta);
+  }
+\end{Verbatim}
+}
+\item Simpler, but roughly same efficiency:
+\begin{Verbatim}
+    sum(y) ~ binomial(N, theta);
+\end{Verbatim}
+\end{itemize}
+
+
+\sld{User-defined functions}
+%
+\begin{itemize}
+\item \myemph{\tt\bfseries functions} \ (compiled with model)
+  \vspace*{-4pt}
+  \begin{itemize}\small
+  \item {\slshape content}: declare and define general (recursive) functions
+    \\
+    {\small (use them elsewhere in program)}
+  \item {\slshape execute}: compile with model
+  \end{itemize}
+  \vspace*{6pt}
+\item Example
+  \\[6pt]
+  \begin{minipage}[t]{0.8\textwidth}
+    \footnotesize
+    \begin{Verbatim}
+      functions {
+
+        real relative_difference(real u, real v) {
+          return 2 * fabs(u - v) / (fabs(u) + fabs(v));
+        }
+
+      }
+    \end{Verbatim}
+  \end{minipage}
+\end{itemize}
+
+\sld{Special user-defined functions}
+%
+\begin{itemize}
+\item When declared with appropriate naming, user-defined functions
+  may
+\begin{subitemize}
+\item be used in sampling statements: \code{real} return and suffix \Verb|_lpdf| or \Verb|_lpmf|
+\item use RNGs: suffix \Verb|_rng|
+\item use target accumulator:  suffix \Verb|_lp|
+\end{subitemize}
+\end{itemize}
+
+
+\sld{User-defed pdfs and cdfs}
+%
+\begin{itemize}
+\item May be used with sampling and PDF/PMF notation
+\begin{subitemize}
+\item \myemph{density}: suffix \code{\_lpdf} if variate (first arg) is real
+\item \myemph{mass}: Suffix \code{\_lpmf} if variate (first arg) is integer
+\end{subitemize}
+\end{itemize}
+%
+{\small
+\begin{stancode}
+functions {
+  real centered_normal_lpdf(real y, real sigma) {
+    return -0.5 * (y / sigma)^2;
+  }
+
+model {
+  y ~ centered_normal(2.5);                 // sampling
+
+  target += centered_normal_lpdf(y | 2.5);  // pdf notation
+\end{stancode}
+}
+
+
+\sld{Target increments}
+%
+\begin{itemize}
+\item May access target or use sampling statements
+\item Only usable in model block
+\begin{subitemize}
+\item must end in \code{\_lp}
+\end{subitemize}
+\end{itemize}
+%
+\begin{stancode}
+functions {
+  vector non_center_lp(vector beta_std, real mu, real sigma) {
+    beta_std ~ normal(0, 1);
+    return mu + sigma * beta_raw;
+  }
+parameters {
+  vector[K] beta_std;
+model {
+  vector[K] beta = non_center_lp(beta_std);
+  y ~ normal(x * beta, sigma);
+\end{stancode}
+
+
+\sld{RNG functions}
+%
+\begin{itemize}
+\item Only usable in generated quantities block
+\begin{subitemize}
+\item must end in \code{\_rng}
+\end{subitemize}
+\end{itemize}
+%
+\begin{stancode}
+functions {
+  real centered_normal_rng(real sigma) {
+    return normal_rng(0, sigma);
+  }
+
+generated quantities {
+  real alpha = centered_normal_rng(2.7);
+\end{stancode}
+
+
+
+\mypart{Under Stan's Hood}{}
+
+
+\sld{Euclidean Hamiltonian Monte Carlo}
+%
+\begin{itemize}
+\item \myemph{Phase space}: $q$ position (parameters); \ $p$ momentum
+\item \myemph{Posterior density}: $\pi(q)$
+\item \myemph{Mass matrix}: $M$
+\item \myemph{Potential energy}: $V(q) = -\log \pi(q)$
+\item \myemph{Kinetic energy}: $T(p) = \frac{1}{2} p^{\top} M^{-1} p$
+\item \myemph{Hamiltonian}:  $H(p,q) = V(q) + T(p)$
+\item \myemph{Diff eqs}:
+  \[
+  \frac{dq}{dt} \ = \  + \frac{\partial H}{\partial p}
+  \hspace*{48pt}
+  \frac{dp}{dt} \ = \ - \frac{\partial H}{\partial q}
+  \]
+\end{itemize}
+
+
+\sld{Leapfrog integrator}
+%
+\begin{itemize}
+\item Solves Hamilton's equations by \myemph{simulating dynamics}
+  \\
+  {\footnotesize (symplectic [volume preserving]; $\epsilon^3$ error per step, $\epsilon^2$ total error)}
+\item Given: \myemph{step size} $\epsilon$, \myemph{mass matrix} $M$, \myemph{parameters} $q$
+\item \myemph{Initialize kinetic} energy, $p \sim {\sf
+    Normal}(0,\mbox{\bf I})$
+\item \myemph{Repeat} for $L$ leapfrog steps:
+  \begin{eqnarray*}
+    p & \leftarrow &
+    p - \frac{\epsilon}{2} \, \frac{\partial V(q)}{\partial q}
+    \ \ \ \ \ \ \mbox{[half step in momentum]}
+    \\[6pt]
+    q & \leftarrow &
+    q + \epsilon \, M^{-1} \, p
+    \ \ \ \ \ \ \ \  \mbox{[full step in position]}
+    \\[6pt]
+    p & \leftarrow &
+    p - \frac{\epsilon}{2} \, \frac{\partial V(q)}{\partial q}
+    \ \ \ \ \ \ \mbox{[half step in momentum]}
+  \end{eqnarray*}
+\end{itemize}
+
+
+\sld{Reverse-mode automatic differentiation}
+%
+\begin{itemize}
+\item Eval gradient in (usually small) multiple of function eval time
+\begin{subitemize}
+\item independent of dimensionality
+\item time proportional to number of expressions evaluated
+\end{subitemize}
+%
+\item Result accurate to machine precision (cf. finite diffs)
+\item Function evaluation builds up \myemph{expression tree}
+\item Dynamic program propagates \myemph{chain rule} in reverse pass
+\item Reverse mode computes $\nabla g$ in one
+  pass for a function $f : \mathbb{R}^N \rightarrow \mathbb{R}$
+\end{itemize}
+
+
+\sld{Autodiff Expression Graph}
+%
+\\
+\hspace*{6pt}
+\begin{minipage}{0.50\textwidth}
+\includegraphics[width=\textwidth]{img/agrad-expression-graph.pdf}
+\end{minipage}
+\hspace*{-24pt}
+\begin{minipage}{0.44\textwidth}
+%
+\footnotesize
+\[
+\begin{array}{l}
+f(y, \mu, \sigma)
+\\[4pt]
+\mbox{ } \ = \ \log \left( \distro{Normal}(y|\mu,\sigma) \right)
+\\[4pt]
+\mbox{ } \ = \ -\frac{1}{2} \left( \frac{y - \mu}{\sigma} \right)^2
+    - \log \sigma
+    - \frac{1}{2} \log (2 \pi)
+\end{array}
+\]
+\\
+%
+\[
+\begin{array}{l}
+\mbox{ } \hspace*{24pt}
+\frac{\partial}{\partial y} f(y,\mu,\sigma)
+\\[2pt]
+\mbox{ } \hspace*{48pt} = \  -(y - \mu) \sigma^{-2}
+\\[8pt]
+\mbox{ } \hspace*{24pt} \frac{\partial}{\partial \mu} f(y,\mu,\sigma)
+\\[2pt]
+\mbox{ } \hspace*{48pt} = \ (y - \mu) \sigma^{-2}
+\\[8pt]
+\mbox{ } \hspace*{24pt} \frac{\partial}{\partial \sigma} f(y,\mu,\sigma)
+\\[2pt]
+\mbox{ } \hspace*{48pt} = \ (y - \mu)^2 \sigma^{-3} - \sigma^{-1}
+\end{array}
+\]
+\end{minipage}
+
+
+\sld{Autodiff Partials}
+%
+\begin{center}\footnotesize
+\begin{tabular}{c||c|cc}
+{\it var} & {\it value} & \multicolumn{2}{|c}{\it partials}
+\\ \hline \hline
+$v_1$ & $y$
+\\[2pt]
+$v_2$ & $\mu$
+\\[2pt]
+$v_3$ & $\sigma$
+\\[2pt]
+$v_4$ & $v_1 - v_2$ & $\partial v_4 / \partial v_1 = 1$
+                   & $\partial v_4 / \partial v_2 = -1$
+\\[4pt]
+$v_5$ & $v_4 / v_3$ & $\partial v_5 / \partial v_4 = 1/v_3$
+                    & $\partial v_5 / \partial v_3 = -v_4 v_3^{-2}$
+\\[4pt]
+$v_6$ & $\left(v_5\right)^2$
+      & \multicolumn{2}{c}{$\partial v_6 / \partial v_5 = 2 v_5$}
+\\[4pt]
+$v_7$ & $(-0.5) v_6$ & \multicolumn{2}{c}{$\partial v_7 / \partial v_6
+                                          = -0.5$}
+\\[4pt]
+$v_8$ & $\log v_3$ & \multicolumn{2}{c}{$\partial v_8 / \partial v_3 = 1/v_3$}
+\\[4pt]
+$v_9$ & $v_7 - v_8$ & $\partial v_9 / \partial v_7 = 1$
+                    & $\partial v_9 / \partial v_8 = -1$
+\\[4pt]
+$v_{10}$ & $v_9 - (0.5 \log 2\pi)$
+         & \multicolumn{2}{c}{$\partial v_{10} / \partial v_9 = 1$}
+\end{tabular}
+\end{center}
+
+\sld{Autodiff: Reverse Pass}
+%
+{\small
+\[
+\begin{array}{rcl|l}
+{\it var} & {\it operation} & {\it adjoint} & {\it result}
+\\ \hline \hline
+a_{1:9} & = & 0 & a_{1:9} = 0
+\\
+a_{10} & = & 1 & a_{10} = 1
+\\ \hline
+a_{9} & {+}{=} & a_{10} \times (1) & a_9 = 1
+\\
+a_{7} & {+}{=} & a_9 \times (1) & a_7 = 1
+\\
+a_{8} & {+}{=} & a_9 \times (-1) & a_8 = -1
+\\
+a_{3} & {+}{=} & a_8 \times (1 / v_3) & a_3 = -1 / v_3
+\\
+a_{6} & {+}{=} & a_7 \times (-0.5) & a_6 = -0.5
+\\
+a_{5} & {+}{=} & a_6 \times (2 v_5) & a_5 = -v_5
+\\
+a_{4} & {+}{=} & a_5 \times (1 / v_3) & a_4 = -v_5 / v_3
+\\
+a_{3} & {+}{=} & a_5 \times (-v_4 v_3^{-2}) & a_3 = -1 / v_3 + v_5 v_4 v_3^{-2}
+\\
+a_{1} & {+}{=} & a_4 \times (1) & a_1 = -v_5 / v_3
+\\
+a_{2} & {+}{=} & a_4 \times (-1) & a_2 = v_5 / v_3
+\end{array}
+\]
+}
+
+
+\sld{Stan's reverse-mode autodiff}
+%
+\begin{itemize}
+\item Easily extensible \myemph{object-oriented} design
+%
+\item \myemph{Code nodes} in expression graph for primitive functions
+\begin{subitemize}
+\item requires \myemph{partial derivatives}
+\item built-in flexible abstract base classes
+\item \myemph{lazy evaluation} of chain rule saves memory
+\end{subitemize}
+%
+\item Autodiff through templated C++ functions
+\begin{subitemize}
+\item templating on each argument avoids excess promotion
+\end{subitemize}
+%
+\end{itemize}
+
+
+\sld{Stan's reverse mode (cont.)}
+%
+\begin{itemize}
+\item Arena-based \myemph{memory management}
+\begin{subitemize}
+\item specialized C++ \code{operator~new} for reverse-mode variables
+\item custom functions inherit memory management through base
+\end{subitemize}
+\item Nested application to support ODE solver
+\end{itemize}
+
+
+\sld{Forward-mode automatic differentiation}
+%
+\begin{itemize}
+\item Evaluates expression graph forward from one independent variable
+to any number of dependent variables
+\item Function evaluation propagates \myemph{chain rule} forward
+\item In one pass, computes $\frac{\partial}{\partial x} f(x)$
+for a function $f : \mathbb{R} \rightarrow \mathbb{R}^N$
+\begin{subitemize}
+\item derivative of $N$ outputs with respect to a single input
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Stan's forward mode}
+%
+\begin{itemize}
+\item Templated scalar type for value and tangent
+\begin{subitemize}
+\item allows higher-order derivatives
+\end{subitemize}
+\item Primitive functions propagate derivatives
+\item No need to build expression graph in memory
+\begin{subitemize}
+\item much less memory intensive than reverse mode
+\end{subitemize}
+\item Autodiff through templated functions (as reverse mode)
+\end{itemize}
+
+\sld{Second-order derivatives}
+%
+\begin{itemize}
+\item Compute Hessian (matrix of second-order partials)
+\[
+H_{i,j} = \frac{\partial^2}{\partial x_i \partial x_j} f(x)
+\]
+\item Required for Laplace covariance approximation (MLE)
+\item Required for curvature (Riemannian HMC)
+\item Nest reverse-mode in forward for \myemph{second order}
+\item $N$ forward passes: takes gradient of derivative
+\item All higher-order derivative patterns available through \myemph{Stan Playground}.
+\end{itemize}
+
+
+
+\sld{Third-order derivatives}
+%
+\begin{itemize}
+\item Required for Riemannian HMC
+\item Gradients of Hessians (tensor of third-order partials)
+\[
+\frac{\partial^3}{\partial x_i \partial x_j \partial x_k} f(x)
+\]
+\vspace*{-12pt}
+\begin{subitemize}
+\item $N^2$ forward passes: gradient of derivative of derivative
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Third-order derivatives (even more esoteric)}
+%
+\begin{itemize}
+\item Gradient of trace of Hessian times matrix
+\begin{subitemize}
+\item $\nabla \mathrm{tr}(H \, M)$, or
+\item needed for Riemannian Hamiltonian Monte Carlo
+\item computable in quadratic time for fixed $M$
+\end{subitemize}
+\end{itemize}
+
+
+\sld{Jacobians}
+%
+\begin{itemize}
+\item Assume function $f:\mathbb{R}^N \rightarrow \mathbb{R}^M$
+\item Partials for multivariate function (matrix of first-order partials)
+\[
+J_{i,j} = \frac{\partial}{\partial x_i} f_j(x)
+\]
+\item Required for stiff ordinary differential equations
+\begin{subitemize}
+\item differentiate is coupled sensitivity autodiff for ODE system
+\end{subitemize}
+\item Two execution strategies
+{\small
+\begin{enumerate}
+  \item Multiple reverse passes for rows
+  \item Forward pass per column (required for stiff ODE)
+\end{enumerate}
+}
+%
+%\vfill
+%
+%\item Order of magnitude faster higher-order autodiff in progress
+%\begin{subitemize}
+%\item reuse single expression graph
+%\item build-in higher-order analytic gradients
+%\end{subitemize}
+\end{itemize}
+
+
+\sld{Autodiff functionals}
+%
+\begin{itemize}
+\item Functionals map templated functors to derivatives
+\begin{subitemize}
+\item fully encapsulates and hides all autodiff types
+\end{subitemize}
+\item Autodiff functionals supported
+  \begin{itemize}\small
+  \item gradients: $\bigoh{1}$
+  \item Jacobians: $\bigoh{N}$
+  \item gradient-vector product (i.e., directional derivative): $\bigoh{1}$
+  \item Hessian-vector product: $\bigoh{N}$
+  \item Hessian: $\bigoh{N}$
+  \item gradient of trace of matrix-Hessian product: $\bigoh{N^2}$
+    \\ {\footnotesize (for SoftAbs RHMC)}
+  \end{itemize}
+\end{itemize}
+
+\sld{Parsing and compilation}
+%
+\begin{itemize}
+\item Stan code \myemph{parsed} to abstract syntax tree (AST)
+  \\ {\footnotesize (Boost Spirit Qi, recursive descent, lazy semantic
+    actions)}
+\item C++ model class \myemph{code generation} from AST
+  \\ {\footnotesize (Boost Variant)}
+\item C++ code \myemph{compilation}
+\item \myemph{Dynamic linking} for RStan, PyStan
+\end{itemize}
+
+
+\sld{Coding probability functions}
+%
+\begin{itemize}
+\item \myemph{Vectorized} to allow scalar or container arguments
+  \\ {\footnotesize (containers all same shape; scalars broadcast as necessary)}
+\item Avoid \myemph{repeated computations}, e.g. $\log \sigma$ in
+  \hspace*{-18pt}
+  {\small
+    \begin{eqnarray*}
+      \textstyle \log \, \mbox{\sf Normal}(y | \mu, \sigma)
+      & = & \textstyle \sum_{n=1}^N \log \, \mbox{\sf Normal}(y_n | \mu,\sigma)
+      \\[4pt]
+      & = & \textstyle \sum_{n=1}^N  - \log \sqrt{2\pi} \ - \log \sigma \ -
+      \frac{\textstyle y_n - \mu}{\textstyle 2\sigma^2}
+    \end{eqnarray*}
+  }
+\item recursive \myemph{expression templates} to broadcast and cache scalars,
+  generalize containers (arrays, matrices, vectors)
+\item \myemph{traits} metaprogram to \myemph{drop constants} (e.g., $-\log
+  \sqrt{2 \pi}$ or $\log \sigma$ if constant)
+  and calculate intermediate and return types
 \end{itemize}
 
 
