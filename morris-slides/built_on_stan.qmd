@@ -135,7 +135,8 @@ with residuals $\epsilon_i \sim N_p(0, \Theta)$ and $\zeta_i \sim N_m(0, \Psi)$.
 
 * The usual Bayesian approach samples two sets of parameters:
    + the structural model parameters:  $\Lambda$, $\mathrm{B}$, $\Psi$, $\Theta$
-   + the $\mathrm{N} \times \mathrm{m}$ matrix of latent variables, where $\mathrm{N}$ is the number of observations (range of $\mathrm{i}$).
+   + the $\mathrm{N} \times \mathrm{m}$ matrix of latent variables,                         
+     where $\mathrm{N}$ is the number of observations (range of $\mathrm{i}$).
 
 * As $\mathrm{N}$ increases, the parameter space grows and the sampler becomes slower and less efficient (latent scores tangle with the variance parameters).
 
@@ -352,6 +353,49 @@ cor(Intercept,Days)     0.07      0.30
 \normalsize
 
 
+
+# Reading the `brms` Output
+
+\fontsize{9pt}{9.1pt}\selectfont
+```r
+Multilevel Hyperparameters:    		     	  Regression Coefficients:
+~Subject (Number of levels: 18) 		            Estimate Est.Error
+                    Estimate Est.Error		  Intercept   251.31      7.40
+sd(Intercept)          27.27      7.03		  Days         10.45      1.70
+sd(Days)                6.60      1.51		  sigma        25.87      1.52
+cor(Intercept,Days)     0.07      0.30
+```
+\normalsize
+
+Formula:  `Reaction ~ Days + (Days | Subject)` has two parts:
+
+\tightlist
+*  Population-level regression  `Reaction ~ Days` - the overall regression coefficients.
+   + Interpretation: the average subject starts around 251 ms, and reaction time increases about 10.5 ms per day.
+
+* Group-level variation by subject: `(Days | Subject)` - each subject has their own intercept and their own Days slope.             
+  + Interpretation: subjects differ in baseline reaction time, differ in their day-to-day change, and those two subject-level deviations may be correlated.
+
+# BRMS Formulas for Regression and Multilevel Regression
+
+* Regression: `Reaction ~ Days`                   
+  Models the average relationship between sleep deprivation and reaction time.
+
+* Varying intercept:  `Reaction ~ Days + (1 | Subject)`                
+  Subjects have different baseline reaction times, but share one Days slope.
+
+* Varying slope:  `Reaction ~ Days + (0 + Days | Subject)`               
+  Subjects share one baseline, but the Days effect varies by subject.
+
+* Varying intercept and slope:  `Reaction ~ Days + (1 + Days | Subject)`              
+  Subjects get their own regression lines.
+  + Alternatively, `Reaction ~ Days + (1 + Days || Subject)`                 
+    intercepts and slopes vary by subject, but does not estimate the correlation between those two kinds of variation.
+
+
+
+
+
 # BRMS Priors
 
 [Prior Definitions for brms Models](https://paulbuerkner.com/brms/reference/set_prior.html)
@@ -371,6 +415,7 @@ cor(Intercept,Days)     0.07      0.30
      student_t(3, 0, 59.3)     sigma                                    0         default
 ```
 \normalsize
+
 
 
 
