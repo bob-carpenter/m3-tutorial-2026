@@ -1,12 +1,12 @@
 data {
   int<lower=0> N;                       // # matchups
-  int<lower-0> J;                       // # items
+  int<lower=0> J;                       // # items
   array[N] int<lower=1, upper=J> ii;    // first item
   array[N] int<lower=1, upper=J> jj;    // second item
   array[N] int<lower=0, upper=1> y;     // outcomes
 }
 parameters {
-  vector[J] alpha;                      // abilities (log odds scale)
+  sum_to_zero_vector[J] alpha;                      // abilities (log odds scale)
 }
 model {
   alpha ~ normal(0, 5);                        // prior
