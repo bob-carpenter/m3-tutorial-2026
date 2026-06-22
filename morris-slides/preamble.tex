@@ -1,0 +1,95 @@
+\definecolor{zlightblue}{rgb}{0.62353, 0.81176, 0.87451}
+\definecolor{zaquablue}{rgb}{0.2431, 0.55686, 0.73725}
+\definecolor{zdarkblue}{rgb}{0.0196, 0.1529, 0.26667}
+\definecolor{zbeige}{rgb}{0.949, 0.898, 0.7412}
+\definecolor{zlightbeige}{rgb}{0.9965, 0.975, 0.9098}
+
+
+\definecolor{stanblue}{RGB}{62,142,188}     % logo blue
+\definecolor{stannavy}{RGB}{5,39,68}        % logo dark blue
+%\definecolor{stanheader}{RGB}{197,221,235}  % light tint
+\definecolor{stanheader}{RGB}{195,223,229}
+
+\setbeamercolor{palette primary}{bg=zlightbeige, fg=stannavy}
+\setbeamercolor{palette secondary}{bg=zlightbeige, fg=stannavy}
+\setbeamercolor{palette tertiary}{bg=zlightbeige, fg=stannavy}
+\setbeamercolor{palette quaternary}{bg=zbeige, fg=stannavy}
+
+
+
+\setbeamercolor{frametitle}{bg=stanheader,fg=stannavy}
+\setbeamercolor{sidebar}{bg=zbeige, fg=zaquablue}
+\setbeamercolor{background canvas}{bg=zlightbeige}
+
+\setbeamercolor{structure}{fg=stannavy} % itemize, enumerate, etc
+\setbeamercolor{section in toc}{fg=stannavy} % TOC sections
+\setbeamercolor{section in head/foot}{bg=zbeige,fg=zaquablue}
+\setbeamercolor{subsection in head/foot}{bg=zbeige,fg=zaquablue}
+
+\setbeamercolor{structure}{fg=stanblue}
+
+\hyphenpenalty=10000
+\hbadness=10000
+\AtBeginEnvironment{quote}{\raggedright}
+
+\setbeamertemplate{frame numbering}[none]
+\setbeamertemplate{title page}[plain]
+
+%\setbeameroption{show notes on second screen=right}
+
+\titlegraphic{\vspace*{4.5cm}%
+  \hspace*{5.5cm}%
+   \includegraphics[width=2.75cm]{img/logo.png}
+}
+
+%\logo{\includegraphics[width=0.75cm]{img/logo.png}}
+
+
+\setbeamerfont{title}{size={\fontsize{18}{18}}}
+\setbeamerfont{subtitle}{size={\fontsize{20}{18}}}
+\setbeamerfont{author}{size={\fontsize{11}{8}}}
+\setbeamerfont{frametitle}{size={\fontsize{15}{16}}}
+
+\setbeamertemplate{frametitle}{%
+    \nointerlineskip%
+    \begin{beamercolorbox}[wd=\paperwidth,ht=3ex,dp=1ex]{frametitle}
+        \hspace*{1ex}\insertframetitle%
+    \end{beamercolorbox}%
+}
+
+\AtBeginDocument{%
+  \hypersetup{
+    colorlinks=true,
+    linkcolor=stanblue,
+    urlcolor=stanblue,
+    citecolor=stanblue,
+    filecolor=stanblue,
+  }%
+}
+
+\linespread{1.3}
+
+\newcommand\given[1][]{\:#1\vert\:}
+
+%\renewcommand{\indent}{\hspace*{2em}}
+
+\usepackage{amsmath}
+
+\usepackage[justification=centering]{caption}
+
+% \usepackage{caption}
+% \captionsetup{justification=raggedright,singlelinecheck=false}
+
+\usepackage[export]{adjustbox}
+
+\usepackage{quoting}
+\quotingsetup{leftmargin=1cm, rightmargin=1cm}
+
+\usepackage{colonequals}
+
+\def\begincols{\begin{columns}}
+\def\begincol{\begin{column}}
+\def\endcol{\end{column}}
+\def\endcols{\end{columns}}
+\def\beginits{\begin{itemize}}
+\def\endits{\end{itemize}}

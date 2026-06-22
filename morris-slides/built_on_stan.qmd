@@ -1,0 +1,648 @@
+---
+title: "Built on Stan (and R):  `blavaan` and `brms`"
+author: "Mitzi Morris"
+institute: "Stan Development Team"
+date: June 22, 2026
+format:
+  beamer:
+    highlight-style: tango
+    aspectratio: 169
+    pdf-engine: pdflatex
+    theme: metropolis
+    include-in-header: preamble.tex
+    navigation: horizontal
+    dev: png
+    colorlinks: true
+---
+
+# The Interface You Know + Stan and Workflow Tools
+
+\vspace{0.075in}
+
+\tightlist
+* `blavaan`: Bayesian Structural Equation Modeling in Stan      
+Fits latent variable models, including confirmatory factor analysis,         
+structural equation models, and latent growth curve models.     
+SEM Syntax (like `lavaan`, LISREL)       
+`blavaan` homepage: [https://blavaan.org/](https://blavaan.org/)      
+
+\vspace{0.075in}
+
+* `brms`:  Bayesian Regression and Multilevelmodeling in Stan           
+Fit Bayesian generalized (non-)linear multivariate multilevel models.       
+R formula syntax (extended).      
+BRMS homepage: [https://paul-buerkner.github.io/brms/](https://paul-buerkner.github.io/brms/)
+
+\vspace{0.075in}
+
+* Workflow tools     
+Stan sampler diagnostics, draws + R packages [`posterior`](https://mc-stan.org/posterior/), [`loo`](https://mc-stan.org/loo/), [`bayesplot`](https://mc-stan.org/bayesplot/)
+Python ecosystem:  [ArviZ](https://python.arviz.org/en/stable/)
+
+
+
+# Bayesian Workflow (elements of)
+\vspace{-0.15in}
+
+* Exploratory data analysis / Data elicitation
+* Model specification
+* Model checking (simulated data)
+  + Recover parameters
+  + Prior predictive distribution checking
+  + Calibration checking
+* Model checking (simulated or observed data)
+  + Sample diagnostics
+  + Posterior predictive checks
+* Model comparison
+  + Leave-one out cross-validation
+
+
+
+# The Need for High-level Interfaces
+
+::: {.quote-block}
+> "Despite the increased popularity of Bayesian latent variable models, **coding the models via JAGS (Plummer 2003) or Stan (Carpenter et al. 2017) syntax can be difficult, and the resulting sampling can be time-consuming and inefficient**.
+
+>
+
+> Other R packages have addressed these issues for related models, including \texttt{brms} (Bürkner 2017) for mixed and multivariate models, \texttt{rstanarm} (Gabry and Goodrich 2020) for regression models, \texttt{ctsem} (Driver et al. 2017) for time series models, \texttt{edstan} (Furr 2017) for item response models, and \texttt{pcFactorStan} (Pritikin 2021) for pairwise comparison factor models."
+
+- **Merkle et al**, "Efficient Bayesian Structural Equation Modeling in Stan"
+:::
+
+
+# `blavaan`: like `lavaan`, only Bayesian
+
+The R package [`lavaan`](https://lavaan.ugent.be/) provides a high-level syntax for specifying and fitting latent variable models
+using maximum likelihood estimation by default.
+
+The [`blavaan`](https://blavaan.org) package uses this syntax and produces full Bayesian posterior estimates.
+
+\fontsize{9.5pt}{10.5}\selectfont
+```r
+model <- '
+  # measurement model
+  math =~ PV1MATH1 + PV1MATH2 + PV1MATH3 + PV1MATH4
+  neg.efficacy =~ ST31Q01 + ST31Q02 + ST31Q03 + ST31Q04
+  neg.selfconcept =~ ST32Q04 + ST32Q06 + ST32Q07 + ST32Q09
+  # structural regression
+  math ~ neg.selfconcept + neg.efficacy
+'
+fit  <- lavaan::sem(model, data = pisa.be.2003)
+bfit <- blavaan::bsem(model, data = pisa.be.2003)
+```
+\normalsize
+
+
+
+# Merkle et al, 2021 `blavaan` 
+
+\begin{figure}[h]
+\centering
+\href{https://www.jstatsoft.org/article/view/v100i06}{\includegraphics[height=0.2\textheight, left]{img/jss_header.jpg}}
+\includegraphics[height=0.42\textheight, left]{img/jss_title.jpg}
+\captionsetup{skip=1pt, justification=raggedright, singlelinecheck=false}
+\end{figure}
+
+\vspace{0.1in}
+
+::: {.quote-block}
+> "The primary contribution of this paper is to describe and illustrate a new approach to Stan SEM estimation, which greatly improves the speed and efficiency of model."
+:::
+
+# Structural Equation Models
+
+For observation $i$, a structural equation model with $p$ observed variables
+$y_i$ and $m$ latent variables $\eta_i$ is:
+
+$$
+\begin{aligned}
+y_i   &= \nu + \Lambda \eta_i + \epsilon_i \\
+\eta_i &= \alpha + \mathrm{B}\,\eta_i + \zeta_i
+\end{aligned}
+$$
+
+with residuals $\epsilon_i \sim N_p(0, \Theta)$ and $\zeta_i \sim N_m(0, \Psi)$.
+
+* $\Lambda$ — factor loadings ($p \times m$)
+* $\mathrm{B}$ — regressions among latent variables ($m \times m$)
+* $\Theta$ — covariance of measurement errors $\epsilon_i$ ($p \times p$)
+* $\Psi$ — covariance of structural errors $\zeta_i$ ($m \times m$)
+* $\nu, \alpha$ — intercepts for observed and latent variables
+
+
+# `blavaan` - JAGS Model (2018)
+
+* The usual Bayesian approach samples two sets of parameters:
+   + the structural model parameters:  $\Lambda$, $\mathrm{B}$, $\Psi$, $\Theta$
+   + the $\mathrm{N} \times \mathrm{m}$ matrix of latent variables, where $\mathrm{N}$ is the number of observations (range of $\mathrm{i}$).
+
+* As $\mathrm{N}$ increases, the parameter space grows and the sampler becomes slower and less efficient (latent scores tangle with the variance parameters).
+
+
+
+# `blavaan` New Stan Approach (2021)
+
+\vspace{0.2in}
+
+::: {.quote-block}
+>"The key to fast sampling in Stan is to work with a model likelihood that is marginal over latent variables"
+:::
+
+\tightlist
+* Integrate out the latent variables. In the Gaussian case there is a closed form: $y_i$ is multivariate normal with
+  $$\Sigma = \Lambda(\mathrm{I}-\mathrm{B})^{-1}\Psi(\mathrm{I}-\mathrm{B})^{-\top}\Lambda^\top + \Theta$$
+
+* Sample only the fixed structural parameters $\Lambda$, $\mathrm{B}$, $\Psi$, $\Theta$
+
+* Factor scores, if needed, are recovered afterward in `generated quantities`.
+
+* \textit{Caveat:} the closed form depends on Gaussian conjugacy, so it does not apply directly to non-normal observed variables.
+
+
+
+
+# `blavaan` Efficiency - Political Democracy Bollen (1989)
+
+\begincols
+\begincol{0.6\linewidth}        
+  \vspace{0.15in}
+  \includegraphics[width=0.98\linewidth]{img/blavaan_ess.jpg}
+  Effective sample size per 100 iterations
+\endcol
+\begincol{0.4\linewidth}        
+\fontsize{9pt}{10}\selectfont
+```
+model <- '
+   # measurement model
+     ind60 =~ x1 + x2 + x3
+     dem60 =~ y1 + y2 + y3 + y4
+     dem65 =~ y5 + y6 + y7 + y8
+   # regressions
+     dem60 ~ ind60
+     dem65 ~ ind60 + dem60
+   # residual covariances
+     y1 ~~ y5
+     y2 ~~ y4 + y6
+     y3 ~~ y7
+     y4 ~~ y8
+     y6 ~~ y8
+'
+```
+\normalsize
+
+\endcol
+\endcols
+
+# `blavaan`: Same SEM, Different Estimator
+
+\tightlist
+* `lavaan`: familiar SEM syntax, maximum likelihood estimation.
+* `blavaan`: same syntax, Bayesian estimation in Stan.
+
+* When data are large and priors are weak, estimates can look similar.
+* The practical difference is what else the fitted model gives you:
+   + posterior uncertainty, not just asymptotic standard errors
+   + explicit priors and prior sensitivity
+   + MCMC diagnostics
+   + Bayesian fit indices and posterior predictive checks
+
+
+\vspace{0.1in}
+
+* Stan Case study: [Bayesian Structural Equation Modeling using `blavaan`](https://mc-stan.org/learn-stan/case-studies/sem.html)
+   + Confirmatory Factor Analysis (CFA), Latent Growth Curve Models, SEM Models, Bayesian Model Evaluation
+
+* Google Group:  [https://groups.google.com/g/blavaan](https://groups.google.com/g/blavaan)
+
+* Ed Merkle case studies:  [https://ecmerkle.org/](https://ecmerkle.org/)
+
+
+
+# BRMS:  Bayesian Regression and Multilevelmodeling in Stan
+\vspace{-0.1in}
+[BRMS package](https://paul-buerkner.github.io/brms/) function `brm` fits multilevel models
+
+\tightlist
+* model specified using extended R formula syntax
+* rich set of distributions
+* workflow checks built-in
+
+\vspace{0.1in}
+
+\fontsize{10pt}{11}\selectfont
+\begincols
+\begincol{0.1\linewidth}        
+\endcol
+\begincol{0.9\linewidth}        
+```
+# model with treatment effect
+fit1 <- brm(count ~ zAge + zBase + Trt + ( 1 | patient) + ( 1 | obs),
+            data = epilepsy, family = negbinomial(),
+            prior = prior(normal(0, 1), class = b),
+            seed = 12345, backend = "cmdstanr")
+```
+\endcol
+\endcols
+\normalsize
+
+\vspace{-0.1in}
+\begincols
+\begincol{0.25\linewidth}        
+  \includegraphics[width=0.55\linewidth, left]{img/brms.png}
+\endcol
+\begincol{0.75\linewidth}        
+ [https://paul-buerkner.github.io/brms/](https://paul-buerkner.github.io/brms/)
+\endcol
+\endcols
+
+# BRMS processing
+\vspace{-0.2in}
+
+Arguments to the `brm` function provide the full specification of the model.
+
+\begincols
+\begincol{0.95\linewidth}        
+\fontsize{10pt}{11}\selectfont
+```
+fit1 <- brm(Reaction ~ Days + (Days|Subject),
+            data = sleepstudy)
+```
+\normalsize
+\endcol
+\endcols
+
+\vspace{0.1in}
+From these arguments, BRMS
+
+\tightlist
+* generates the Stan code and input data (use functions `stancode` and `standata` to inspect)
+
+* runs CmdStanR to generate a sample
+
+* returns/manages the fitted model object
+
+* fitted model object has methods for plotting, and prediction, model checking, model comparison,
+
+
+
+# Multi-level Modeling with BRMS
+\vspace{-0.1in}
+
+The conceptual structure of a multi-level model is: $y_i \sim \mathrm{D}(\, {\mathit{f\,}^{-1}}(\eta_i),\,\theta )$
+
+\tightlist
+* $\mathrm{y}$ is the modeled data, i.e., the observed outcome generated by the model given the (unmodeled) inputs
+* $\mathrm{D}$ is a distributional **family** (default gaussian)
+* $\eta$ is the linear predictor 
+   + $\eta$ can be transformed by an inverse _link function_ $\mathit{f}$
+   + $\eta$ can be rewritten as $\mathrm{X}\,\beta + \mathrm{Z\,u}$ where             
+     $\beta$ and $\mathrm{u}$ are population-level and group-level coefficients respectively and                   
+     $\mathrm{X}$ and $\mathrm{Z}$ are the corresponding design matrices      
+* $\theta$ denotes family-specific parameter(s)
+
+
+# Model Specification in BRMS
+
+\tightlist
+* The extended formula syntax for a multilevel model has the general form          
+  \texttt{response $\sim$ pterms + (gterms | group)}           
+  where:        
+
+   + pterms: the population-level effects, constant across observations.
+   + gterms: the group-level effects, varying across the levels of a group.
+   + the intercept term is either $1$ or $0$ for no intercept; if unspecified, default is $1$.
+
+\vspace{0.075in}
+
+* Arguments to the `brm` function provide the full specification of the model.
+  + first argument:  the extended-syntax  R formula for $\eta$, the linear predictor
+  + second argument (`data`) - a dataframe containing all data for $y$, $X$, and $Z$.
+  + arg `family` - distributional family $\mathrm{D}$ (can define custom family in Stan)
+  + arg `prior` - priors on all model parameters
+  + (advanced options)
+
+
+# BRMS Processing
+* Pass all information to BRMS
+
+\fontsize{9pt}{9pt}\selectfont
+```r
+brm(Reaction ~ Days + (Days|Subject), data = sleepstudy)
+```
+\normalsize
+
+* Get results
+
+\fontsize{9pt}{9pt}\selectfont
+```r
+ Family: gaussian 
+  Links: mu = identity; sigma = identity 
+Formula: Reaction ~ Days + (Days | Subject) 
+   Data: sleepstudy (Number of observations: 180) 
+
+Multilevel Hyperparameters:    		     	  Regression Coefficients:
+~Subject (Number of levels: 18) 		            Estimate Est.Error
+                    Estimate Est.Error		  Intercept   251.31      7.40
+sd(Intercept)          27.27      7.03		  Days         10.45      1.70
+sd(Days)                6.60      1.51		  sigma        25.87      1.52
+cor(Intercept,Days)     0.07      0.30
+```
+\normalsize
+
+
+# BRMS Priors
+
+[Prior Definitions for brms Models](https://paulbuerkner.com/brms/reference/set_prior.html)
+\fontsize{9pt}{9.1pt}\selectfont
+```r
+> prior_summary(sleep_mlm_brmsfit)
+                     prior     class      coef   group resp dpar nlpar lb ub       source
+                    (flat)         b                                              default
+                    (flat)         b      Days                               (vectorized)
+ student_t(3, 288.7, 59.3) Intercept                                              default
+      lkj_corr_cholesky(1)         L                                              default
+      lkj_corr_cholesky(1)         L           Subject                       (vectorized)
+     student_t(3, 0, 59.3)        sd                                    0         default
+     student_t(3, 0, 59.3)        sd           Subject                  0    (vectorized)
+     student_t(3, 0, 59.3)        sd      Days Subject                  0    (vectorized)
+     student_t(3, 0, 59.3)        sd Intercept Subject                  0    (vectorized)
+     student_t(3, 0, 59.3)     sigma                                    0         default
+```
+\normalsize
+
+
+
+# Reasons to Use BRMS
+
+\tightlist
+* Familiar syntax (for R users).
+
+\vspace{0.05in}
+* Handles many common models:  IRT, zero-inflated, additive distributional, phylogenetic, missing data imputation.
+  + makes varying slope/ varying intercept models easy.
+
+\vspace{0.05in}
+* Generated models are sound and robust
+  + zero-centers predictors  (like RStanARM).
+
+\vspace{0.05in}
+* Integrated diagnostics and model checks
+  + prior and posterior predictive checking
+  + leave-one-out cross-validation
+
+\vspace{0.05in}
+* Large community of users
+  + majority of questions on Stan mailing list are BRMS.
+  + many helpful community experts to answer them!
+
+# BRMS Tradeoffs
+
+\begincols
+\begincol{0.4\linewidth}        
+
+\vspace{0.15in}
+\includegraphics[height=0.9\textheight]{img/brms_processing.png}
+\endcol
+\begincol{0.6\linewidth}        
+
+* BRMS makes choices:
+    + default priors (easy to override).
+    + uses the [non-centered parameterization](https://mc-stan.org/docs/stan-users-guide/efficiency-tuning.html#reparameterization.section) for hierarchical models (cannot override).
+
+* Generated Stan code is hard to read or modify.
+
+* No free lunch!
+    + complicated models require complicated specifications.
+
+\endcol
+\endcols
+
+
+
+
+
+# Bayesian Workflow
+
+* The new book:  [Bayesian Workflow](https://avehtari.github.io/Bayesian-Workflow/)
+
+* Section 5.2 of Merkle et al 2021:  Simulation-Based Calibration to investigate priors.
+
+* Key paper:
+
+\begin{figure}[h]
+\centering
+\href{https://academic.oup.com/jrsssa/article/182/2/389/7070184}{%
+  \includegraphics[height=0.32\textheight, left]{img/RSS_Gabry_2019.png}
+}
+\end{figure}
+
+# Running example
+
+\tightlist
+
+\vspace{0.1in}
+\begin{figure}[h]
+\centering
+\includegraphics[height=0.32\textheight]{img/shaddick_2016.png}
+\captionsetup{skip=0pt, justification=raggedright, singlelinecheck=false}
+\caption*{\fontsize{10pt}{11}\selectfont \ \ \textit{https://arxiv.org/pdf/1609.00141.pdf}}
+\end{figure}
+
+* Air pollution from particles less than 2.5 microns in diameter (${PM}_{2.5}$).
+* $107$ countries, $7$ WHO regions, $6003$ paired satellite/ground monitor observations at $2980$ locations
+
+
+# Shaddick et al - Ground-level air pollution
+
+\vspace{-0.2in}
+\tightlist
+
+\vspace{0.05in}
+\begincols[T]
+\begincol{0.33\linewidth}
+\begin{figure}[h]
+\centering
+\includegraphics[height=0.32\textheight]{img/shaddick_fig_1.png}
+\captionsetup{skip=1pt}
+\caption*{\fontsize{9pt}{10}\selectfont ${PM}_{2.5}$ ground monitor readings}
+\end{figure}
+\endcol
+\begincol{0.33\linewidth}
+\begin{figure}[h]
+\centering
+\includegraphics[height=0.32\textheight]{img/shaddick_fig_2.png}
+\captionsetup{skip=1pt}
+\caption*{\fontsize{9pt}{10}\selectfont ${PM}_{2.5}$ satellite readings}
+\end{figure}
+\endcol
+\begincol{0.33\linewidth}
+\begin{figure}[h]
+\centering
+\includegraphics[height=0.32\textheight]{img/shaddick_fig_4.png}
+\captionsetup{skip=1pt}
+\caption*{\fontsize{9pt}{10}\selectfont Population density}
+\end{figure}
+\endcol
+\endcols
+
+\tightlist
+* Ground monitors: accurate but sparse (no data for $70$ countries),                 
+  cluster near (some) populations.
+* Satellites: global coverage but noisier (optical artifacts).
+* Shaddick et al.'s broader goal: use satellite coverage to estimate PM2.5.
+* Gabry et al. use the data to illustrate the Bayesian workflow by building a small network of models that relate ${PM}_{2.5}$ ground monitor readings to co-located satellite readings.
+
+# Workflow: Exploratory Data Analysis
+
+\fontsize{13pt}{15}\selectfont
+_The Model Can Often Only Be Understood in the Context of the Data_
+\normalsize
+
+* The model describes the data generating process
+* Data tendencies require different priors
+* Large data / small data regimes require centered / non-centered parameterization
+
+[The Prior Can Often Only Be Understood in the Context of the Likelihood](https://www.mdpi.com/1099-4300/19/10/555)
+
+\hfill Gelman et al, 2017
+
+# EDA: What Patterns are in the Data?
+
+\begincols
+\begincol{0.25\linewidth}        
+
+* Outcome: ground monitor $\log(PM_{2.5})$
+* (Predictor: satellite $\log(PM_{2.5})$)
+* What are the ground monitor readings?
+
+\endcol
+\begincol{0.75\linewidth}        
+\includegraphics[height=0.75\textheight]{img/brms_eda_log_pm25_map.png}
+\endcol
+\endcols
+
+# EDA: Complete Pooling vs. Group Countries?
+
+\begincols
+\begincol{0.5\linewidth}        
+
+* Outcome: ground monitor $\log(PM_{2.5})$
+* Predictor: satellite $\log(PM_{2.5})$
+* Plot colored by WHO super-region, single regression line.
+
+\endcol
+\begincol{0.50\linewidth}        
+\includegraphics[height=0.75\textheight]{img/gabry_plot1.png}
+\endcol
+\endcols
+
+# EDA: What Grouping Structure is Plausible?
+
+\begincols
+\begincol{0.50\linewidth}        
+
+* Group by WHO super-region
+   + 1 region for the rich countries
+   + 6 geo-graphical regions
+  
+* Group by ground monitor readings
+   + 7 clusters
+
+\endcol
+\begincol{0.50\linewidth}        
+\includegraphics[height=0.85\textheight]{img/gabry_fig2.png}
+\endcol
+\endcols
+
+
+# EDA: What Grouping Structure is Plausible?
+\vspace{0.1in}
+
+\begincols
+\begincol{0.5\linewidth}        
+\includegraphics[height=0.75\textheight]{img/gabry_plot2.png}
+
+Group by WHO super-region
+\endcol
+
+\begincol{0.5\linewidth}        
+\includegraphics[height=0.75\textheight]{img/gabry_plot3.png}
+
+Cluster on ground monitor $\log(PM_{2.5})$
+
+\endcol
+\endcols
+
+# BRMS Models
+
+\vspace{-0.1in}
+
+
+1. Complete pooling:
+   one calibration curve for all sites.
+
+\fontsize{9.5pt}{10.5}\selectfont
+```r
+    fit_complete_pool =
+      brm(log_pm25 ~ 1 + log_sat,
+          data = sites)
+```
+\normalsize
+
+2. Partial pooling by WHO region:
+   region-specific intercepts and slopes.
+
+\fontsize{9.5pt}{10.5}\selectfont
+```r
+    fit_super_region =
+      brm(log_pm25 ~ 1 + log_sat + (1 + log_sat | super_region_name),
+          data = sites)
+```
+\normalsize
+
+3. Partial pooling by pollution cluster:
+   cluster-specific intercepts and slopes.
+
+\fontsize{9.5pt}{10.5}\selectfont
+```r
+    fit_cluster_region =
+      brm(log_pm25 ~ 1 + log_sat + (1 + log_sat | cluster_region),
+          data = sites)
+```
+\normalsize
+
+
+# Gabry et al - Prior predictive checks
+
+\vspace{-0.1in}
+Visualize (or summarize) the prior marginal distribution of the data
+
+\begin{figure}[h]
+\centering
+\includegraphics[height=0.7\textheight]{img/gabry_fig_4.png}
+\end{figure}
+
+Note:  histogram of just the simulated data also informative.
+
+
+# Model Correctness Checks
+\vspace{-0.1in}
+
+Given a single model and data, either collected or simulated,
+the most basic correctness checks are:
+
+* Can the sampler fit the data satisfactorily?
+  + Grossly misspecified models fail to initialize, or chains fail to converge.
+
+* Did NUTS fit the model without warnings?
+* Are $\hat{R}$ and ESS satisfactory?
+* Are posterior estimates on a plausible scale?
+
+Difficult to fit models may require reparameterization
+
+
+# Workflow in Action:  BRMS Notebook
+
+We use Jupyter lab to run the notebook `fit_air_brms.qmd`
+
