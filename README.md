@@ -11,6 +11,9 @@ at Fordham University.
   <img src="carpenter-slides/img/qr-code-github.png" alt="QR code for M3 tutorial" width="150">
 </p>
 
+## Food near Lincoln Center
+
+* [Click for map (pdf)](lincoln-center-food.pdf)
 
 ## Bob Carpenter's slides
 
