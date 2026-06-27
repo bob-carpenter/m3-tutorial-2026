@@ -9,7 +9,7 @@ format:
     aspectratio: 169
     pdf-engine: pdflatex
     theme: metropolis
-    include-in-header: ../preamble.tex
+    include-in-header: preamble.tex
     navigation: horizontal
     dev: png
     colorlinks: true
